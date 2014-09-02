@@ -42,7 +42,6 @@
       <artifactId>fcrepo4-bom</artifactId>
       <version>${fcrepo4.version}</version>
       <type>pom</type>
-      <scope>import</scope>
     </dependency>
     <dependency>
       <groupId>ch.qos.logback</groupId>
@@ -119,6 +118,7 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
+        <version>1.3.2</version>
         <configuration>
           <mainClass>edu.ucsd.library.floadr.Floadr</mainClass>
         </configuration>
