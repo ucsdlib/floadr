@@ -10,6 +10,8 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 
+import javax.activation.MimetypesFileTypeMap;
+
 import org.fcrepo.client.FedoraContent;
 import org.fcrepo.client.FedoraDatastream;
 import org.fcrepo.client.FedoraException;
@@ -27,6 +29,10 @@ import org.slf4j.Logger;
 public class Floadr {
 
     private static Logger log = getLogger(Floadr.class);
+    private static MimetypesFileTypeMap mimeTypes = new MimetypesFileTypeMap();
+    private static int errors = 0;
+    private static int created = 0;
+    private static int skipped = 0;
 
     /**
      * Command-line operation.
@@ -52,16 +58,35 @@ public class Floadr {
                 final FedoraObject obj = repo.findOrCreateObject( "/" + pairPath );
                 log.info("Object: " + obj.getPath());
                 for ( File f : objFiles ) {
-                    final String fn = f.getName();
-                    final InputStream in = new FileInputStream(f);
-                    final FedoraContent content = new FedoraContent().setContent(in)
-                            .setFilename(fn); // XXX setContentType()
-                    final String fileId = fileId( id, fn );
-                    final String dsPath = "/" + pairPath + fileId;
-                    final FedoraDatastream ds = repo.createDatastream( dsPath, content );
-                    log.info("  Datastream: " + ds.getPath());
+                    loadFile( repo, id, f );
                 }
             }
+        }
+        log.info("created: " + created + ", skipped: " + skipped + ", errors: " + errors);
+    }
+
+    private static void loadFile( FedoraRepository repo, String objid, File dsFile ) {
+        try {
+            final String fn = dsFile.getName();
+            if ( fn.matches("^20775-" + objid + "-\\d-.*") && !fn.endsWith("rdf.xml") ) {
+                final String fileId = fileId( objid, fn );
+                final String dsPath = "/" + pairPath(objid) + fileId;
+                if ( repo.exists( dsPath ) ) {
+                    log.info("  Skipped: " + fn);
+                    skipped++;
+                } else {
+                    final InputStream in = new FileInputStream(dsFile);
+                    final String mimeType = mimeTypes.getContentType(dsFile);
+                    final FedoraContent content = new FedoraContent().setContent(in)
+                            .setFilename(fn).setContentType(mimeType);
+                    final FedoraDatastream ds = repo.createDatastream( dsPath, content );
+                    log.info("  Datastream: " + ds.getPath());
+                    created++;
+                }
+            }
+        } catch ( Exception ex ) {
+            errors++;
+            log.warn("Error: " + ex.toString());
         }
     }
 
@@ -69,10 +94,12 @@ public class Floadr {
      * Convert a filename to a file id.
     **/
     private static String fileId( final String objid, final String filename ) {
-        String fid = filename.substring(filename.indexOf(objid) + objid.length() + 1);
-        fid = fid.replaceAll("^0-", "-");
-        fid = fid.replaceAll("-", "/");
-        return fid;
+        String[] parts = filename.split("-",4);
+        if ( parts[2].equals("0") ) {
+            return parts[3];
+        } else {
+            return parts[2] + "/" + parts[3];
+        }
     }
 
     /**
