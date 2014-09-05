@@ -55,7 +55,7 @@ public class Floadr {
             final File objDir = new File( sourceDir, pairPath );
             final File[] objFiles = objDir.listFiles();
             if ( objFiles.length > 0 ) {
-                final FedoraObject obj = repo.findOrCreateObject( "/" + pairPath );
+                final FedoraObject obj = repo.findOrCreateObject( "/" + objPath(id) );
                 log.info("Object: " + obj.getPath());
                 for ( File f : objFiles ) {
                     loadFile( repo, id, f );
@@ -70,7 +70,7 @@ public class Floadr {
             final String fn = dsFile.getName();
             if ( fn.matches("^20775-" + objid + "-\\d-.*") && !fn.endsWith("rdf.xml") ) {
                 final String fileId = fileId( objid, fn );
-                final String dsPath = "/" + pairPath(objid) + fileId;
+                final String dsPath = "/" + objPath(objid) + fileId;
                 if ( repo.exists( dsPath ) ) {
                     log.info("  Skipped: " + fn);
                     skipped++;
@@ -102,10 +102,14 @@ public class Floadr {
         }
     }
 
+    public static String objPath( String s ) {
+        return s + "/";
+    }
+
     /**
      * Convert a string into a pairpath directory tree.
     **/
-    private static String pairPath( String s ) {
+    public static String pairPath( String s ) {
         if ( s == null ) { return null; }
         String result = "";
         int i = 0;

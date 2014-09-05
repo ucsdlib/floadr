@@ -6,7 +6,7 @@ command-line utility to use the [fedora4 java client library](https://github.com
 example usage:
 
 ```sh
-$ mvn exec:java -Dexec.args="http://localhost:8080/rest ids.txt /path/to/files"
+$ mvn exec:java -Dexec.mainClass=edu.ucsd.library.floadr.Floadr -Dexec.args="http://localhost:8080/rest ids.txt /path/to/files"
 ```
 
 where
