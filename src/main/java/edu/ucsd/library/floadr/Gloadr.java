@@ -94,8 +94,14 @@ public class Gloadr {
             final FedoraObject rights = repo.findOrCreateObject( "/" + objPath + "/rights" );
 
             // load metadata
-            final FedoraObject obj = repo.findOrCreateObject( "/" + objPath );
-            obj.updateProperties( new ByteArrayInputStream(doc.asXML().getBytes()), "application/rdf+xml");
+            try {
+                final FedoraObject obj = repo.findOrCreateObject( "/" + objPath );
+                InputStream in = new ByteArrayInputStream(doc.asXML().getBytes());
+                obj.updateProperties( in, "application/rdf+xml");
+            } catch ( Exception ex ) {
+                log.warn("Error updating " + objPath);
+                log.warn( doc.asXML() );
+            }
         }
     }
 }

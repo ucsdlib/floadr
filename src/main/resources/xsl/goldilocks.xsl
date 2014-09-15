@@ -165,7 +165,7 @@
         <xsl:when test="dams:type = 'identifier' and dams:displayLabel = 'ARK'">
           <d5:ark><xsl:value-of select="rdf:value"/></d5:ark>
         </xsl:when>
-        <xsl:when test="dams:type = 'identifier' and dams:displayLabel = 'local'">
+        <xsl:when test="dams:type = 'identifier'">
           <d5:identifier><xsl:value-of select="rdf:value"/></d5:identifier>
         </xsl:when>
         <xsl:when test="dams:type = 'extent'">
@@ -309,7 +309,7 @@
     <xsl:variable name="id">
       <xsl:choose>
         <xsl:when test="dams:Unit/@rdf:about != ''">
-          <xsl:value-of select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
+          <xsl:value-of select="concat($repositoryURL, substring-after(dams:Unit/@rdf:about, $oldns))"/>
         </xsl:when>
         <xsl:when test="@rdf:resource">
           <xsl:value-of select="concat($repositoryURL, substring-after(@rdf:resource, $oldns))"/>
