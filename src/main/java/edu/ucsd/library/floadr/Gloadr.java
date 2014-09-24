@@ -91,7 +91,7 @@ public class Gloadr {
             }
 
             // make sure rights node exists
-            final FedoraObject rights = repo.findOrCreateObject( "/" + objPath + "/rights" );
+            final FedoraObject rights = repo.findOrCreateObject( "/" + objPath + "rights" );
 
             // load metadata
             try {
@@ -99,7 +99,7 @@ public class Gloadr {
                 InputStream in = new ByteArrayInputStream(doc.asXML().getBytes());
                 obj.updateProperties( in, "application/rdf+xml");
             } catch ( Exception ex ) {
-                log.warn("Error updating " + objPath);
+                log.warn("Error updating " + objPath + ": " + ex.toString());
                 log.warn( doc.asXML() );
             }
         }

@@ -226,9 +226,8 @@
         </xsl:choose>
       </xsl:variable>
 
-      <xsl:variable name="name" select="dams:personalName/mads:PersonalName|dams:corporateName/mads:CorporateName|dams:conferenceName/mads:ConferenceName|dams:familyName/mads:FamilyName|dams:otherName/mads:Name"/>
-      <xsl:variable name="nameold" select="$name/@rdf:about"/>
-      <xsl:variable name="nameid" select="concat($repositoryURL, substring-after($nameold, $oldns))"/>
+      <xsl:variable name="name" select="dams:personalName/mads:PersonalName/@rdf:about|dams:corporateName/mads:CorporateName/@rdf:about|dams:conferenceName/mads:ConferenceName/@rdf:about|dams:familyName/mads:FamilyName/@rdf:about|dams:otherName/mads:Name/@rdf:about|dams:name/mads:Name/@rdf:about|dams:personalName/@rdf:resource|dams:corporateName/@rdf:resource|dams:conferenceName/@rdf:resource|dams:familyName/@rdf:resource|dams:otherName/@rdf:resource/dams:name/@rdf:resource"/>
+      <xsl:variable name="nameid" select="concat($repositoryURL, substring-after($name, $oldns))"/>
 
       <xsl:element name="d5:{$role}">
         <xsl:attribute name="rdf:resource"><xsl:value-of select="$nameid"/></xsl:attribute>
@@ -259,8 +258,20 @@
       </xsl:for-each>
 
       <xsl:for-each select="dams:license/dams:License">
-        <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-        <premis:hasLicenseTerms rdf:resource="{$id}"/>
+        <xsl:choose>
+          <xsl:when test="@rdf:about">
+            <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
+            <premis:hasLicenseTerms rdf:resource="{$id}"/>
+          </xsl:when>
+          <xsl:otherwise>
+            <xsl:for-each select="dams:licenseNote">
+              <premis:hasLicenseTerms><xsl:value-of select="."/></premis:hasLicenseTerms>
+            </xsl:for-each>
+            <xsl:for-each select="dams:restriction/dams:Restriction/dams:endDate">
+              <hydra:embargoExpires><xsl:value-of select="."/></hydra:embargoExpires>
+            </xsl:for-each>
+          </xsl:otherwise>
+        </xsl:choose>
       </xsl:for-each>
 
       <xsl:for-each select="dams:otherRights/dams:OtherRights/dams:otherRightsBasis">
