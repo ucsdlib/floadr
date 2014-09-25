@@ -7,13 +7,16 @@
     </encoder>
   </appender>
 
-  <logger name="org.fcrepo.client" additivity="false" level="${log.fcrepo.client:-INFO}">
+  <logger name="org.fcrepo.client" additivity="false" level="${log.fcrepo.client:-WARN}">
     <appender-ref ref="STDOUT"/>
   </logger>
-  <logger name="org.fcrepo" additivity="false" level="${log.fcrepo:-INFO}">
+  <logger name="org.fcrepo" additivity="false" level="${log.fcrepo:-WARN}">
     <appender-ref ref="STDOUT"/>
   </logger>
   <logger name="edu.ucsd.library.floadr" additivity="false" level="${edu.ucsd.library.floadr:-INFO}">
+    <appender-ref ref="STDOUT"/>
+  </logger>
+  <logger name="org.apache.xerces" additivity="false" level="ERROR">
     <appender-ref ref="STDOUT"/>
   </logger>
   <root additivity="false" level="WARN">

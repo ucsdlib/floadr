@@ -70,6 +70,10 @@ public class Floadr {
             final String fn = dsFile.getName();
             if ( fn.matches("^20775-" + objid + "-\\d-.*") && !fn.endsWith("rdf.xml") ) {
                 final String fileId = fileId( objid, fn );
+                if ( fileId.indexOf("/") != -1 ) {
+                    final String compPath = "/" + objPath(objid) + fileId.replaceAll("/.*","");
+                    repo.findOrCreateObject( compPath );
+                }
                 final String dsPath = "/" + objPath(objid) + fileId;
                 if ( repo.exists( dsPath ) ) {
                     log.info("  Skipped: " + fn);

@@ -11,7 +11,8 @@
     xmlns:foaf="http://xmlns.com/foaf/0.1/"
     xmlns:fcrepo="http://fedora.info/definitions/v4/repository#"
     xmlns:fedorarelsext="http://fedora.info/definitions/v4/rels-ext#"
-    xmlns:premis="http://www.loc.gov/premis/rdf/v1#">
+    xmlns:premis="http://www.loc.gov/premis/rdf/v1#"
+    xmlns:skos="http://www.w3.org/2004/02/skos/core#">
 
   <xsl:output method="xml"/>
   <xsl:variable name="oldns">http://library.ucsd.edu/ark:/20775</xsl:variable>
@@ -22,6 +23,19 @@
   <xsl:template match="/rdf:RDF">
     <rdf:RDF>
       <xsl:apply-templates/>
+
+      <!-- collections -->
+      <xsl:for-each select="//dams:AssembledCollection|//dams:ProvenanceCollection|//dams:ProvenanceCollectionPart">
+        <xsl:call-template name="collection"/>
+      </xsl:for-each>
+      <xsl:for-each select="//dams:Unit">
+        <xsl:call-template name="unit"/>
+      </xsl:for-each>
+
+      <!-- subjects -->
+      <xsl:for-each select="//mads:BuiltWorkPlace|//mads:ComplexSubject|//mads:ConferenceName|//mads:CorporateName|//mads:CulturalContext|//mads:FamilyName|//mads:Function|//mads:GenreForm|//mads:Geographic|//mads:Language|//mads:Iconography|//mads:Name|//mads:PersonalName|//mads:ScientificName|//mads:StylePeriod|//mads:Technique|//mads:Temporal|//mads:Topic">
+        <xsl:call-template name="subject"/>
+      </xsl:for-each>
     </rdf:RDF>
   </xsl:template>
 
@@ -35,6 +49,46 @@
         </dc:RightsStatement>
       </dc:rights>
     </d5:Object>
+  </xsl:template>
+
+  <!-- collection records -->
+  <xsl:template name="collection">
+    <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
+    <d5:Collection rdf:about="{$id}">
+      <xsl:apply-templates/>
+    </d5:Collection>
+  </xsl:template>
+  <xsl:template match="dams:hasAssembledCollection|dams:hasProvenanceCollection|dams:hasPart|dams:hasCollection">
+    <xsl:for-each select="dams:AssembledCollection|dams:ProvenanceCollection|dams:ProvenanceCollectionPart">
+      <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
+      <d5:hasCollection rdf:resource="{$id}"/>
+    </xsl:for-each>
+  </xsl:template>
+  <xsl:template match="dams:visibility">
+    <!-- XXX does this map to rights? -->
+    <d5:visibility><xsl:value-of select="."/></d5:visibility>
+  </xsl:template>
+  <xsl:template name="unit">
+    <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
+    <d5:Collection rdf:about="{$id}">
+      <dc:title><xsl:value-of select="dams:unitName"/></dc:title>
+      <dc:note><xsl:value-of select="dams:unitDescription"/></dc:note>
+      <dc:relation rdf:resource="{dams:unitURI}"/>
+    </d5:Collection>
+  </xsl:template>
+
+  <xsl:template name="subject">
+    <xsl:if test="mads:authoritativeLabel">
+      <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
+      <skos:Concept rdf:about="{$id}">
+        <skos:prefLabel><xsl:value-of select="mads:authoritativeLabel"/></skos:prefLabel>
+        <xsl:for-each select="mads:isMemberOfMADSScheme/mads:MADSScheme/mads:hasExactExternalAuthority[@rdf:resource]">
+          <skos:inScheme rdf:resource="{@rdf:resource}"/>
+        </xsl:for-each>
+        <!-- XXX concept type topic/geographic/etc.... -->
+        <dc:type><xsl:value-of select="local-name()"/></dc:type>
+      </skos:Concept>
+    </xsl:if>
   </xsl:template>
 
   <!-- fields ================================================================================= -->
@@ -107,7 +161,7 @@
   <xsl:template match="dams:hasFile">
     <xsl:for-each select="dams:File">
       <xsl:variable name="fid" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-      <d5:file>
+      <fcrepo:hasChild>
         <d5:File rdf:about="{$fid}">
           <d5:compositionLevel><xsl:value-of select="dams:compositionLevel"/></d5:compositionLevel>
           <d5:dateCreated><xsl:value-of select="dams:dateCreated"/></d5:dateCreated>
@@ -140,7 +194,7 @@
              </fedora:binary>
           </fcrepo:hasContent>
         </d5:File>
-      </d5:file>
+      </fcrepo:hasChild>
     </xsl:for-each>
   </xsl:template>
 
@@ -154,7 +208,7 @@
   <xsl:template match="dams:complexSubject">
     <xsl:for-each select="mads:ComplexSubject">
       <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-      <d5:complexSubject rdf:resource="{$id}"/>
+      <d5:subject rdf:resource="{$id}"/>
     </xsl:for-each>
   </xsl:template>
 
@@ -181,6 +235,11 @@
       </xsl:choose>
     </xsl:for-each>
   </xsl:template>
+  <xsl:template match="dams:scopeContentNote">
+    <d5:scopeAndContent>
+      <xsl:value-of select="dams:ScopeContentNote/rdf:value"/>
+    </d5:scopeAndContent>
+  </xsl:template>
 
   <!-- related resources -->
   <xsl:template match="dams:relatedResource">
@@ -188,14 +247,17 @@
       <!-- link if rdf:about, inline if not -->
       <xsl:choose>
         <xsl:when test="@rdf:about">
+          <xsl:variable name="tmp" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
           <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
           <d5:relatedResource rdf:resource="{$id}"/>
         </xsl:when>
         <xsl:otherwise>
           <d5:relatedResource>
-            <d5:uri><xsl:value-of select="dams:uri"/></d5:uri>
-            <d5:type><xsl:value-of select="dams:type"/></d5:type>
-            <d5:label><xsl:value-of select="dams:description"/></d5:label>
+            <d5:RelatedResource>
+              <d5:uri rdf:resource="{dams:uri/@rdf:resource|dams:uri/text()}"/>
+              <d5:type><xsl:value-of select="dams:type"/></d5:type>
+              <d5:label><xsl:value-of select="dams:description"/></d5:label>
+            </d5:RelatedResource>
           </d5:relatedResource>
         </xsl:otherwise>
       </xsl:choose>
@@ -219,8 +281,12 @@
       <xsl:variable name="role">
         <xsl:choose>
           <xsl:when test="$rolename = 'Former owner'">formerOwner</xsl:when>
+          <xsl:when test="$rolename = 'Principal investigator'">principalInvestigator</xsl:when>
+          <xsl:when test="$rolename = 'Research team head'">researchTeamHead</xsl:when>
+          <xsl:when test="$rolename = 'Research team member'">researchTeamMember</xsl:when>
+          <!-- XXX: need better value processing... -->
           <xsl:when test="$rolename">
-            <xsl:value-of select="translate($rolename, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')"/>
+            <xsl:value-of select="translate($rolename, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ()', 'abcdefghijklmnopqrstuvwxyz___')"/>
           </xsl:when>
           <xsl:otherwise>creator</xsl:otherwise>
         </xsl:choose>
@@ -330,7 +396,7 @@
         </xsl:otherwise>
       </xsl:choose>
     </xsl:variable>
-    <d5:relatedResource rdf:resource="{$id}"/>
+    <d5:collection rdf:resource="{$id}"/>
   </xsl:template>
 
   <xsl:template match="*">
