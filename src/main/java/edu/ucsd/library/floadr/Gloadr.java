@@ -70,48 +70,62 @@ public class Gloadr {
         // for each id, transform metadata and update fedora
         int success = 0;
         int errors  = 0;
-        List<String> errorIds = new ArrayList<>();
+        int record = 0;
+        final List<String> errorIds = new ArrayList<>();
         BufferedReader objectIdReader = new BufferedReader( new FileReader(objectIds) );
         for ( String id = null; (id = objectIdReader.readLine()) != null; ) {
-            log.info("loading: " + id);
-            final String pairPath = Floadr.pairPath(id);
-            final String objPath = Floadr.objPath(id);
-            final File objDir = new File( sourceDir, pairPath );
-            final File metaFile = new File( objDir, "20775-" + id + "-0-rdf.xml" );
+            record++;
+            log.info(record + ": loading: " + id);
+            final String objPath = "/" + Floadr.objPath(id);
+            final File metaFile = new File( sourceDir + "/" + Floadr.pairPath(id)
+                    + "20775-" + id + "-0-rdf.xml" );
 
             // transform metadata
-            final StreamSource metaSource = new StreamSource(metaFile);
             final DocumentResult result = new DocumentResult();
-            xslt.transform( metaSource, result );
+            xslt.transform( new StreamSource(metaFile), result );
             final Document doc = result.getDocument();
 
             try {
                 // make sure rights node exists
-                log.info("creating " + objPath + "rights");
-                final FedoraObject rights = repo.findOrCreateObject( "/" + objPath + "rights" );
+                if ( !repo.exists( objPath + "rights") ) {
+                    log.info(record + ": creating " + objPath + "rights");
+                    repo.createObject(objPath + "rights");
+                }
 
                 // make sure links work
                 final List links = doc.selectNodes("//*[@rdf:resource]|//*[@rdf:about]");
+                int linked = 0;
                 Map<FedoraObject,Node> metadata = new HashMap<>();
+                metadata.put( repo.getObject(objPath), doc );
                 for ( Iterator it = links.iterator(); it.hasNext(); ) {
+                    linked++;
                     Element e = (Element)it.next();
                     Attribute about = e.attribute(0);
                     String linkPath = about.getValue();
-                    if ( linkPath.startsWith(repositoryURL) && !linkPath.endsWith("/fcr:content") ) {
+                    if ( linkPath.startsWith(repositoryURL) && !linkPath.endsWith("/fcr:content")) {
                         linkPath = linkPath.replaceAll(repositoryURL,"");
-                        log.info("creating " + linkPath);
-                        final FedoraObject obj = repo.findOrCreateObject( linkPath );
-                        if ( about.getName().equals("about") ) {
-                            metadata.put(obj, e);
+                        if ( linkPath.equals(objPath) ) {
+                            // current record's metadata
+                        } else if ( !repo.exists(linkPath) ) {
+                            // only create/update records if they don't already exist
+                            log.info(record + ": creating " + linkPath + " (" + linked + ")");
+                            final FedoraObject obj = repo.createObject( linkPath );
+                            if ( about.getName().equals("about") && !linkPath.startsWith(objPath)) {
+                                // only post metadata about external objs that don't already exist
+                                //metadata.put(obj, e);
+                            }
                         }
                     }
                 }
 
                 // update metadata
+                int updated = 0;
                 for ( FedoraObject obj : metadata.keySet() ) {
-                    Node node = metadata.get(obj);
-                    log.info("updating " + obj.getPath());
-                    obj.updateProperties( new ByteArrayInputStream(doc.asXML().getBytes()), "application/rdf+xml");
+                    updated++;
+                    final Node node = metadata.get(obj);
+                    log.info(record + ": updating " + obj.getPath() + " (" + updated + ")");
+                    obj.updateProperties( new ByteArrayInputStream(node.asXML().getBytes()),
+                            "application/rdf+xml");
                 }
                 success++;
             } catch ( Exception ex ) {
@@ -123,7 +137,7 @@ public class Gloadr {
         }
 
         log.info("done: " + success + "/" + errors);
-        for ( String id : errorIds ) {
+        for ( final String id : errorIds ) {
             log.info("error: " + id);
         }
     }
