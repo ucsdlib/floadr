@@ -57,6 +57,10 @@ public class Gloadr {
         final String repositoryURL = args[0];
         final File objectIds = new File(args[1]);
         final File sourceDir = new File(args[2]);
+        String federatedURL = null;
+        if ( args.length > 3 ) {
+            federatedURL = args[3];
+        }
 
         // load goldilocks.xsl
         final StreamSource xsl = new StreamSource(Gloadr.class.getClassLoader().getResourceAsStream(
@@ -86,8 +90,12 @@ public class Gloadr {
             final Document doc = result.getDocument();
 
             try {
-                // make sure rights node exists
-                if ( !repo.exists( objPath + "rights") ) {
+                // make sure object and rights nodes exist
+                if ( !repo.exists(objPath) ) {
+                    log.info(record + ": creating " + objPath);
+                    repo.createObject(objPath);
+                }
+                if ( !repo.exists(objPath + "rights") ) {
                     log.info(record + ": creating " + objPath + "rights");
                     repo.createObject(objPath + "rights");
                 }
@@ -95,8 +103,6 @@ public class Gloadr {
                 // make sure links work
                 final List links = doc.selectNodes("//*[@rdf:resource]|//*[@rdf:about]");
                 int linked = 0;
-                Map<FedoraObject,Node> metadata = new HashMap<>();
-                metadata.put( repo.getObject(objPath), doc );
                 for ( Iterator it = links.iterator(); it.hasNext(); ) {
                     linked++;
                     Element e = (Element)it.next();
@@ -104,29 +110,32 @@ public class Gloadr {
                     String linkPath = about.getValue();
                     if ( linkPath.startsWith(repositoryURL) && !linkPath.endsWith("/fcr:content")) {
                         linkPath = linkPath.replaceAll(repositoryURL,"");
-                        if ( linkPath.equals(objPath) ) {
-                            // current record's metadata
-                        } else if ( !repo.exists(linkPath) ) {
+                        if ( !repo.exists(linkPath) ) {
                             // only create/update records if they don't already exist
-                            log.info(record + ": creating " + linkPath + " (" + linked + ")");
-                            final FedoraObject obj = repo.createObject( linkPath );
-                            if ( about.getName().equals("about") && !linkPath.startsWith(objPath)) {
-                                // only post metadata about external objs that don't already exist
-                                //metadata.put(obj, e);
+                            if ( e.getName().equals("File") ) {
+                                log.info(record + ": datastream " + linkPath + " (" + linked + ")");
+                                repo.createDatastream( linkPath, new FedoraContent().setContent(new ByteArrayInputStream(new byte[]{})) );
+                            } else {
+                                log.info(record + ": creating " + linkPath + " (" + linked + ")");
+                                repo.createObject( linkPath );
                             }
                         }
+                    } else if ( linkPath.startsWith(repositoryURL)
+                            && linkPath.endsWith("/fcr:content") && federatedURL != null ) {
+                        final String dsPath = linkPath.replaceAll("/fcr:content","").replaceAll(repositoryURL,"");
+                        final String fedURL = linkPath.replaceAll(repositoryURL,federatedURL);
+                        final String mimeType = e.valueOf("hasContent/binary/mimeType");
+                        final FedoraDatastream ds = repo.findOrCreateDatastream(dsPath);
+                        String sparql = "insert data { <> <http://fedora.info/definitions/v4/rels-ext#hasExternalContent> <" + fedURL + "> }";
+                        ds.updateProperties(sparql);
                     }
                 }
 
                 // update metadata
-                int updated = 0;
-                for ( FedoraObject obj : metadata.keySet() ) {
-                    updated++;
-                    final Node node = metadata.get(obj);
-                    log.info(record + ": updating " + obj.getPath() + " (" + updated + ")");
-                    obj.updateProperties( new ByteArrayInputStream(node.asXML().getBytes()),
-                            "application/rdf+xml");
-                }
+                log.info(record + ": updating " + objPath);
+
+                repo.getObject(objPath).updateProperties(
+                        new ByteArrayInputStream(doc.asXML().getBytes()), "application/rdf+xml");
                 success++;
             } catch ( Exception ex ) {
                 log.warn("Error updating " + objPath + ": " + ex.toString());
