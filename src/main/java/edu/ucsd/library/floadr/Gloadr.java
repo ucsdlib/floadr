@@ -1,6 +1,7 @@
 package edu.ucsd.library.floadr;
 
 import static org.slf4j.LoggerFactory.getLogger;
+import static edu.ucsd.library.floadr.Floadr.pairPath;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -81,7 +82,7 @@ public class Gloadr {
             record++;
             log.info(record + ": loading: " + id);
             final String objPath = "/" + Floadr.objPath(id);
-            final File metaFile = new File( sourceDir + "/" + Floadr.pairPath(id)
+            final File metaFile = new File( sourceDir + "/" + pairPath(id)
                     + "20775-" + id + "-0-rdf.xml" );
 
             // transform metadata
@@ -109,7 +110,8 @@ public class Gloadr {
                     Attribute about = e.attribute(0);
                     String linkPath = about.getValue();
                     if ( linkPath.startsWith(repositoryURL) && !linkPath.endsWith("/fcr:content")) {
-                        linkPath = linkPath.replaceAll(repositoryURL,"");
+                        linkPath = fixLink(linkPath, repositoryURL);
+                        about.setValue(repositoryURL + linkPath);
                         if ( !repo.exists(linkPath) ) {
                             // only create/update records if they don't already exist
                             if ( e.getName().equals("File") ) {
@@ -122,12 +124,15 @@ public class Gloadr {
                         }
                     } else if ( linkPath.startsWith(repositoryURL)
                             && linkPath.endsWith("/fcr:content") && federatedURL != null ) {
-                        final String dsPath = linkPath.replaceAll("/fcr:content","").replaceAll(repositoryURL,"");
-                        final String fedURL = linkPath.replaceAll(repositoryURL,federatedURL);
+                        linkPath = fixLink(linkPath, repositoryURL);
+                        about.setValue(repositoryURL + linkPath);
+                        final String fedURL = federatedURL + linkPath;
                         final String mimeType = e.valueOf("hasContent/binary/mimeType");
-                        final FedoraDatastream ds = repo.findOrCreateDatastream(dsPath);
+                        final FedoraDatastream ds = repo.findOrCreateDatastream(linkPath.replaceAll(repositoryURL,""));
                         String sparql = "insert data { <> <http://fedora.info/definitions/v4/rels-ext#hasExternalContent> <" + fedURL + "> }";
                         ds.updateProperties(sparql);
+                    } else {
+                        System.out.println("skipping: " + linkPath );
                     }
                 }
 
@@ -149,5 +154,16 @@ public class Gloadr {
         for ( final String id : errorIds ) {
             log.info("error: " + id);
         }
+    }
+	private static String fixLink( String path, String repositoryURL ) {
+        String s = path.replaceAll(repositoryURL + "/", "");
+        String[] parts = s.split("/",2);
+        parts[0] = pairPath(parts[0]);
+        String newPath = "/" + parts[0];
+        if ( parts.length == 2 ) {
+            newPath += parts[1];
+        }
+        log.info("fixLink: " + path + " => " + newPath);
+        return newPath;
     }
 }

@@ -107,7 +107,7 @@ public class Floadr {
     }
 
     public static String objPath( String s ) {
-        return s + "/";
+        return pairPath(s);
     }
 
     /**
