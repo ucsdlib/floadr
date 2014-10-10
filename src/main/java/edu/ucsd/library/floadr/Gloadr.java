@@ -72,6 +72,14 @@ public class Gloadr {
         // create repository object
         final FedoraRepository repo = new FedoraRepositoryImpl(repositoryURL);
 
+        // profiling data
+        long dur1;
+        long dur2;
+        long xsltDur = 0L;
+        long recsDur = 0L;
+        long linkDur = 0L;
+        long metaDur = 0L;
+
         // for each id, transform metadata and update fedora
         int success = 0;
         int errors  = 0;
@@ -86,12 +94,16 @@ public class Gloadr {
                     + "20775-" + id + "-0-rdf.xml" );
 
             // transform metadata
+            dur1 = System.currentTimeMillis();
             final DocumentResult result = new DocumentResult();
             xslt.transform( new StreamSource(metaFile), result );
             final Document doc = result.getDocument();
+            dur2 = System.currentTimeMillis();
+            xsltDur += (dur2 - dur1);
 
             try {
                 // make sure object and rights nodes exist
+            	dur1 = System.currentTimeMillis();
                 if ( !repo.exists(objPath) ) {
                     log.info(record + ": creating " + objPath);
                     repo.createObject(objPath);
@@ -100,8 +112,11 @@ public class Gloadr {
                     log.info(record + ": creating " + objPath + "rights");
                     repo.createObject(objPath + "rights");
                 }
+            	dur2 = System.currentTimeMillis();
+            	recsDur += (dur2 - dur1);
 
                 // make sure links work
+            	dur1 = System.currentTimeMillis();
                 final List links = doc.selectNodes("//*[@rdf:resource]|//*[@rdf:about]");
                 int linked = 0;
                 for ( Iterator it = links.iterator(); it.hasNext(); ) {
@@ -135,12 +150,16 @@ public class Gloadr {
                         System.out.println("skipping: " + linkPath );
                     }
                 }
+            	dur2 = System.currentTimeMillis();
+            	linkDur += (dur2 - dur1);
 
                 // update metadata
                 log.info(record + ": updating " + objPath);
-
+            	dur1 = System.currentTimeMillis();
                 repo.getObject(objPath).updateProperties(
                         new ByteArrayInputStream(doc.asXML().getBytes()), "application/rdf+xml");
+            	dur2 = System.currentTimeMillis();
+            	metaDur += (dur2 - dur1);
                 success++;
             } catch ( Exception ex ) {
                 log.warn("Error updating " + objPath + ": " + ex.toString());
@@ -154,6 +173,7 @@ public class Gloadr {
         for ( final String id : errorIds ) {
             log.info("error: " + id);
         }
+        log.info("xslt: " + xsltDur + ", recs: " + recsDur + ", link: " + linkDur + ", meta: " + metaDur);
     }
 	private static String fixLink( String path, String repositoryURL ) {
         String s = path.replaceAll(repositoryURL + "/", "");
