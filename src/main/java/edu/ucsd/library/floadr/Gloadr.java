@@ -93,21 +93,20 @@ public class Gloadr {
             final File metaFile = new File( sourceDir + "/" + pairPath(id)
                     + "20775-" + id + "-0-rdf.xml" );
 
+            Document doc = null;
             // transform metadata
-            dur1 = System.currentTimeMillis();
-            final DocumentResult result = new DocumentResult();
-            xslt.transform( new StreamSource(metaFile), result );
-            final Document doc = result.getDocument();
-            dur2 = System.currentTimeMillis();
-            xsltDur += (dur2 - dur1);
-
             try {
+                dur1 = System.currentTimeMillis();
+                final DocumentResult result = new DocumentResult();
+                xslt.transform( new StreamSource(metaFile), result );
+                doc = result.getDocument();
+                dur2 = System.currentTimeMillis();
+                xsltDur += (dur2 - dur1);
+
                 // make sure object and rights nodes exist
             	dur1 = System.currentTimeMillis();
-                if ( !repo.exists(objPath) ) {
-                    log.info(record + ": creating " + objPath);
-                    repo.createObject(objPath);
-                }
+                log.info(record + ": loading/creating " + objPath);
+                FedoraObject obj = repo.findOrCreateObject(objPath);
                 if ( !repo.exists(objPath + "rights") ) {
                     log.info(record + ": creating " + objPath + "rights");
                     repo.createObject(objPath + "rights");
@@ -156,14 +155,13 @@ public class Gloadr {
                 // update metadata
                 log.info(record + ": updating " + objPath);
             	dur1 = System.currentTimeMillis();
-                repo.getObject(objPath).updateProperties(
-                        new ByteArrayInputStream(doc.asXML().getBytes()), "application/rdf+xml");
+                obj.updateProperties(new ByteArrayInputStream(doc.asXML().getBytes()), "application/rdf+xml");
             	dur2 = System.currentTimeMillis();
             	metaDur += (dur2 - dur1);
                 success++;
             } catch ( Exception ex ) {
                 log.warn("Error updating " + objPath + ": " + ex.toString());
-                log.warn( doc.asXML() );
+                if ( doc != null ) { log.warn( doc.asXML() ); }
                 errors++;
                 errorIds.add(id);
             }
