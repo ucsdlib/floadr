@@ -10,6 +10,7 @@ import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -35,6 +36,13 @@ import org.fcrepo.client.FedoraException;
 import org.fcrepo.client.FedoraRepository;
 import org.fcrepo.client.FedoraObject;
 import org.fcrepo.client.impl.FedoraRepositoryImpl;
+
+import com.hp.hpl.jena.graph.Triple;
+import com.hp.hpl.jena.rdf.model.Model;
+import com.hp.hpl.jena.rdf.model.RDFNode;
+import com.hp.hpl.jena.rdf.model.Statement;
+import com.hp.hpl.jena.rdf.model.StmtIterator;
+import com.hp.hpl.jena.rdf.model.ModelFactory;
 
 import org.slf4j.Logger;
 
@@ -103,17 +111,6 @@ public class Gloadr {
                 dur2 = System.currentTimeMillis();
                 xsltDur += (dur2 - dur1);
 
-                // make sure object and rights nodes exist
-            	dur1 = System.currentTimeMillis();
-                log.info(record + ": loading/creating " + objPath);
-                FedoraObject obj = repo.findOrCreateObject(objPath);
-                if ( !repo.exists(objPath + "rights") ) {
-                    log.info(record + ": creating " + objPath + "rights");
-                    repo.createObject(objPath + "rights");
-                }
-            	dur2 = System.currentTimeMillis();
-            	recsDur += (dur2 - dur1);
-
                 // make sure links work
             	dur1 = System.currentTimeMillis();
                 final List links = doc.selectNodes("//*[@rdf:resource]|//*[@rdf:about]");
@@ -152,10 +149,37 @@ public class Gloadr {
             	dur2 = System.currentTimeMillis();
             	linkDur += (dur2 - dur1);
 
+                // make sure object and rights nodes exist
+            	dur1 = System.currentTimeMillis();
+                if ( !repo.exists(objPath + "rights") ) {
+                    log.info(record + ": creating " + objPath + "rights");
+                    repo.createObject(objPath + "rights");
+                }
+                log.info(record + ": loading " + objPath);
+                FedoraObject obj = repo.getObject(objPath);
+            	dur2 = System.currentTimeMillis();
+            	recsDur += (dur2 - dur1);
+
                 // update metadata
                 log.info(record + ": updating " + objPath);
             	dur1 = System.currentTimeMillis();
-                obj.updateProperties(new ByteArrayInputStream(doc.asXML().getBytes()), "application/rdf+xml");
+				// load existing graph into a model
+                Model m = ModelFactory.createDefaultModel();
+                for ( Iterator<Triple> it = obj.getProperties(); it.hasNext(); ) {
+                    final Statement s = m.asStatement(it.next());
+                    m.add( s );
+                }
+                m.write(System.out);
+
+                // update model with our rdf
+                m.read(new ByteArrayInputStream(doc.asXML().getBytes("utf-8")), null, "RDF/XML");
+
+                // serialize updated model and update repo
+                final StringWriter sw = new StringWriter();
+                m.write(sw);
+                final String update = sw.toString();
+                System.out.println("\n----------\n" + update + "\n----------");
+                obj.updateProperties(new ByteArrayInputStream(update.getBytes("utf-8")), "application/rdf+xml");
             	dur2 = System.currentTimeMillis();
             	metaDur += (dur2 - dur1);
                 success++;
@@ -181,7 +205,7 @@ public class Gloadr {
         if ( parts.length == 2 ) {
             newPath += parts[1];
         }
-        log.info("fixLink: " + path + " => " + newPath);
+        log.debug("fixLink: " + path + " => " + newPath);
         return newPath;
     }
 }

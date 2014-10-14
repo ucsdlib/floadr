@@ -11,6 +11,7 @@
     xmlns:foaf="http://xmlns.com/foaf/0.1/"
     xmlns:fcrepo="http://fedora.info/definitions/v4/repository#"
     xmlns:fedorarelsext="http://fedora.info/definitions/v4/rels-ext#"
+    xmlns:ldp="http://www.w3.org/ns/ldp#"
     xmlns:premis="http://www.loc.gov/premis/rdf/v1#"
     xmlns:skos="http://www.w3.org/2004/02/skos/core#">
 
@@ -36,18 +37,23 @@
       <xsl:for-each select="//mads:BuiltWorkPlace|//mads:ComplexSubject|//mads:ConferenceName|//mads:CorporateName|//mads:CulturalContext|//mads:FamilyName|//mads:Function|//mads:GenreForm|//mads:Geographic|//mads:Language|//mads:Iconography|//mads:Name|//mads:PersonalName|//mads:ScientificName|//mads:StylePeriod|//mads:Technique|//mads:Temporal|//mads:Topic">
         <xsl:call-template name="subject"/>
       </xsl:for-each>
+
+      <!-- files -->
+      <xsl:call-template name="files"/>
+
     </rdf:RDF>
+
   </xsl:template>
 
   <xsl:template match="dams:Object">
     <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
     <d5:Object rdf:about="{$id}">
       <xsl:apply-templates/>
-      <dc:rights>
+      <d5:rights>
         <dc:RightsStatement rdf:about="{$id}/rights">
           <xsl:call-template name="rights-statement"/>
         </dc:RightsStatement>
-      </dc:rights>
+      </d5:rights>
     </d5:Object>
   </xsl:template>
 
@@ -73,7 +79,7 @@
     <d5:Collection rdf:about="{$id}">
       <dc:title><xsl:value-of select="dams:unitName"/></dc:title>
       <dc:note><xsl:value-of select="dams:unitDescription"/></dc:note>
-      <dc:relation rdf:resource="{dams:unitURI}"/>
+      <d5:relation rdf:resource="{dams:unitURI}"/>
     </d5:Collection>
   </xsl:template>
 
@@ -158,43 +164,37 @@
   <xsl:template match="dams:event"/>
 
   <!-- files -->
-  <xsl:template match="dams:hasFile">
-    <xsl:for-each select="dams:File">
+  <xsl:template match="dams:hasFile"/>
+  <xsl:template name="files">
+    <xsl:for-each select="//dams:File">
       <xsl:variable name="fid" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-      <fcrepo:hasChild>
-        <d5:File rdf:about="{$fid}">
-          <d5:compositionLevel><xsl:value-of select="dams:compositionLevel"/></d5:compositionLevel>
-          <d5:dateCreated><xsl:value-of select="dams:dateCreated"/></d5:dateCreated>
-          <d5:formatName><xsl:value-of select="dams:formatName"/></d5:formatName>
-          <d5:formatVersion><xsl:value-of select="dams:formatVersion"/></d5:formatVersion>
-          <d5:objectCategory><xsl:value-of select="dams:objectCategory"/></d5:objectCategory>
-          <d5:preservationLevel><xsl:value-of select="dams:preservationLevel"/></d5:preservationLevel>
-          <d5:quality><xsl:value-of select="dams:quality"/></d5:quality>
-          <d5:use><xsl:value-of select="dams:use"/></d5:use>
-  
-          <fcrepo:hasContent>
-            <fedora:binary rdf:about="{$fid}/fcr:content">
-              <xsl:for-each select="dams:crc32checksum">
-                <fedora:digest>urn:crc32:<xsl:value-of select="."/></fedora:digest>
-              </xsl:for-each>
-              <xsl:for-each select="dams:md5checksum">
-                <fedora:digest>urn:md5:<xsl:value-of select="."/></fedora:digest>
-              </xsl:for-each>
-              <xsl:for-each select="dams:sha1checksum">
-                <fedora:digest>urn:sha1:<xsl:value-of select="."/></fedora:digest>
-              </xsl:for-each>
-              <d5:mimeType><xsl:value-of select="dams:mimeType"/></d5:mimeType>
-              <xsl:for-each select="dams:sourceFileName">
-                <premis:hasOriginalName><xsl:value-of select="."/></premis:hasOriginalName>
-              </xsl:for-each>
-              <xsl:for-each select="dams:sourcePath">
-                <d5:sourcePath><xsl:value-of select="."/></d5:sourcePath>
-              </xsl:for-each>
-              <d5:size><xsl:value-of select="dams:size"/></d5:size>
-             </fedora:binary>
-          </fcrepo:hasContent>
-        </d5:File>
-      </fcrepo:hasChild>
+      <fedora:datastream rdf:about="{$fid}/fcr:metadata">
+        <d5:compositionLevel><xsl:value-of select="dams:compositionLevel"/></d5:compositionLevel>
+        <d5:dateCreated><xsl:value-of select="dams:dateCreated"/></d5:dateCreated>
+        <d5:formatName><xsl:value-of select="dams:formatName"/></d5:formatName>
+        <d5:formatVersion><xsl:value-of select="dams:formatVersion"/></d5:formatVersion>
+        <d5:objectCategory><xsl:value-of select="dams:objectCategory"/></d5:objectCategory>
+        <d5:preservationLevel><xsl:value-of select="dams:preservationLevel"/></d5:preservationLevel>
+        <d5:quality><xsl:value-of select="dams:quality"/></d5:quality>
+        <d5:use><xsl:value-of select="dams:use"/></d5:use>
+        <xsl:for-each select="dams:crc32checksum">
+          <fedora:digest>urn:crc32:<xsl:value-of select="."/></fedora:digest>
+        </xsl:for-each>
+        <xsl:for-each select="dams:md5checksum">
+          <fedora:digest>urn:md5:<xsl:value-of select="."/></fedora:digest>
+        </xsl:for-each>
+        <xsl:for-each select="dams:sha1checksum">
+          <fedora:digest>urn:sha1:<xsl:value-of select="."/></fedora:digest>
+        </xsl:for-each>
+        <d5:mimeType><xsl:value-of select="dams:mimeType"/></d5:mimeType>
+        <xsl:for-each select="dams:sourceFileName">
+          <premis:hasOriginalName><xsl:value-of select="."/></premis:hasOriginalName>
+        </xsl:for-each>
+        <xsl:for-each select="dams:sourcePath">
+          <d5:sourcePath><xsl:value-of select="."/></d5:sourcePath>
+        </xsl:for-each>
+        <d5:size><xsl:value-of select="dams:size"/></d5:size>
+      </fedora:datastream>
     </xsl:for-each>
   </xsl:template>
 
@@ -346,7 +346,7 @@
 
       <xsl:for-each select="dams:rightsHolder/*|dams:rightsHolderCorporate/*|dams:rightsHolderPersonal/*">
         <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-        <dc:rightsHolder rdf:resource="{$id}"/>
+        <d5:rightsHolder rdf:resource="{$id}"/>
       </xsl:for-each>
 
       <xsl:for-each select="dams:statute">
