@@ -169,7 +169,6 @@ public class Gloadr {
                     final Statement s = m.asStatement(it.next());
                     m.add( s );
                 }
-                m.write(System.out);
 
                 // update model with our rdf
                 m.read(new ByteArrayInputStream(doc.asXML().getBytes("utf-8")), null, "RDF/XML");
@@ -178,7 +177,6 @@ public class Gloadr {
                 final StringWriter sw = new StringWriter();
                 m.write(sw);
                 final String update = sw.toString();
-                System.out.println("\n----------\n" + update + "\n----------");
                 obj.updateProperties(new ByteArrayInputStream(update.getBytes("utf-8")), "application/rdf+xml");
             	dur2 = System.currentTimeMillis();
             	metaDur += (dur2 - dur1);
