@@ -49,6 +49,7 @@
     <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
     <d5:Object rdf:about="{$id}">
       <xsl:apply-templates/>
+      <rdf:type rdf:resource="http://fedora.info/definitions/v4/indexing#indexable"/>
       <d5:rights>
         <dc:RightsStatement rdf:about="{$id}/rights">
           <xsl:call-template name="rights-statement"/>
