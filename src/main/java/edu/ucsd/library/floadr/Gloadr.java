@@ -130,7 +130,7 @@ public class Gloadr {
                                 repo.createDatastream( linkPath, new FedoraContent().setContent(new ByteArrayInputStream(new byte[]{})) );
                             } else {
                                 log.info(record + ": creating " + linkPath + " (" + linked + ")");
-                                repo.createObject( linkPath );
+                                makeIndexable( repo.createObject(linkPath) );
                             }
                         }
                     } else if ( linkPath.startsWith(repositoryURL)
@@ -155,8 +155,12 @@ public class Gloadr {
                     log.info(record + ": creating " + objPath + "rights");
                     repo.createObject(objPath + "rights");
                 }
+
                 log.info(record + ": loading " + objPath);
                 FedoraObject obj = repo.getObject(objPath);
+
+                // make object indexable
+				makeIndexable(obj);
             	dur2 = System.currentTimeMillis();
             	recsDur += (dur2 - dur1);
 
@@ -194,6 +198,9 @@ public class Gloadr {
             log.info("error: " + id);
         }
         log.info("xslt: " + xsltDur + ", recs: " + recsDur + ", link: " + linkDur + ", meta: " + metaDur);
+    }
+    private static void makeIndexable( FedoraObject obj ) throws FedoraException {
+        obj.updateProperties("insert { <> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://fedora.info/definitions/v4/indexing#indexable> } where {}");
     }
 	private static String fixLink( String path, String repositoryURL ) {
         String s = path.replaceAll(repositoryURL + "/", "");

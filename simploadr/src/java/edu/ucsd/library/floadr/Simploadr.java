@@ -239,6 +239,7 @@ public class Simploadr {
             HttpResponse response = client.execute(request);
             int status = response.getStatusLine().getStatusCode();
             if ( verbose && status > 399 ) {
+                System.out.println("URL..: " + request.getURI());
                 System.out.println("Error: " + response.getStatusLine());
                 if ( response.getEntity() != null ) {
                     String body = EntityUtils.toString(response.getEntity());
