@@ -6,6 +6,7 @@
   <property name="src"       value="${basedir}/src"/>
   <property name="java"      value="${src}/java"/>
   <property name="lib"       value="${src}/lib"/>
+  <property name="props"     value="${src}/properties"/>
   <property name="xsl"       value="${src}/xsl"/>
   <property name="tmp"       value="${basedir}/tmp"/>
 
@@ -40,6 +41,9 @@
       <!-- <compilerarg line="-Xlint:unchecked"/> -->
       <!-- <compilerarg line="-Xlint:all"/> -->
     </javac>
+    <copy todir="${tmp}/classes">
+      <fileset dir="${props}"/>
+    </copy>
   </target>
 
   <!-- load -->
@@ -47,8 +51,9 @@
     <echo message="load.url: ${load.url}"/>
     <echo message="load.dir: ${load.dir}"/>
     <echo message="load.ids: ${load.ids}"/>
+    <echo message="load.mod: ${load.mod}"/>
     <java classname="edu.ucsd.library.floadr.Simploadr" classpathref="execpath">
-      <arg line="${load.url} ${load.ids} ${load.dir}"/>
+      <arg line="${load.url} ${load.ids} ${load.dir} ${load.mod}"/>
     </java>
   </target>
 

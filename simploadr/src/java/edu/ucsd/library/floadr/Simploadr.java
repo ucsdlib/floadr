@@ -73,6 +73,12 @@ public class Simploadr {
         File objectIds = new File(args[1]);
         File sourceDir = new File(args[2]);
 
+        String mode = "meta";
+        if ( args.length > 3 ) { mode = args[3]; }
+        boolean files = (mode != null && mode.indexOf("files") != -1);
+        boolean meta  = (mode != null && mode.indexOf("meta")  != -1);
+        boolean merge = (mode != null && mode.indexOf("merge") != -1);
+
         PoolingClientConnectionManager pool = new PoolingClientConnectionManager();
         pool.setMaxTotal(Integer.MAX_VALUE);
         pool.setDefaultMaxPerRoute(Integer.MAX_VALUE);
@@ -99,14 +105,18 @@ public class Simploadr {
                 createObject( objPath(id) );
 
                 // load files
-                for ( File f : objFiles ) {
-                    createFile( id, f );
+                if ( files ) {
+                    for ( File f : objFiles ) {
+                        createFile( id, f );
+                    }
                 }
 
                 // load metadata
-                File metaFile = new File( sourceDir + "/" + pairPath(id) + "20775-" + id
-                        + "-0-rdf.xml" );
-                loadMetadata( id, metaFile );
+                if ( meta ) {
+                    File metaFile = new File( sourceDir + "/" + pairPath(id) + "20775-" + id
+                            + "-0-rdf.xml" );
+                    loadMetadata( id, metaFile, merge );
+                }
             }
             System.out.println(records + ", metadata: " + recordsUpdated + ", files: " + filesCreated + ", skipped: " + filesSkipped + ", errors: " + errors);
         }
@@ -155,7 +165,7 @@ public class Simploadr {
         }
     }
 
-    private static void loadMetadata( String objid, File metaFile ) {
+    private static void loadMetadata( String objid, File metaFile, boolean merge ) {
         try {
             // xslt metadata
             final DocumentResult result = new DocumentResult();
@@ -178,7 +188,6 @@ public class Simploadr {
 
             HttpPut put = new HttpPut(repositoryURL + objPath(objid));
             put.addHeader( "Content-Type", "application/rdf+xml" );
-            boolean merge = true;
             if ( merge ) {
                 // load RDF from repo
                 System.out.println( objid + ": merging metadata");
