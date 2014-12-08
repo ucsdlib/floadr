@@ -1,17 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-    xmlns:dams="http://library.ucsd.edu/ontology/dams#"
     xmlns:d5="http://library.ucsd.edu/ontology/d5#"
-    xmlns:mads="http://www.loc.gov/mads/rdf/v1#"
-    xmlns:hydra="http://projecthydra.org/rights#"
-    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:dams="http://library.ucsd.edu/ontology/dams#"
     xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:dcterms="http://purl.org/dc/terms/"
+    xmlns:edm="http://www.europeana.eu/schemas/edm/"
     xmlns:foaf="http://xmlns.com/foaf/0.1/"
-    xmlns:fcrepo="http://fedora.info/definitions/v4/repository#"
-    xmlns:ldp="http://www.w3.org/ns/ldp#"
+    xmlns:gn="http://www.geonames.org/ontology#"
+    xmlns:mads="http://www.loc.gov/mads/rdf/v1#"
+    xmlns:marcrel="http://id.loc.gov/vocabulary/relators/"
+    xmlns:mix="http://www.loc.gov/mix/v20#"
+    xmlns:modsrdf="http://www.loc.gov/mods/rdf/v1#"
     xmlns:premis="http://www.loc.gov/premis/rdf/v1#"
-    xmlns:skos="http://www.w3.org/2004/02/skos/core#">
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:rights="http://projecthydra.org/rights#"
+    xmlns:skos="http://www.w3.org/2004/02/skos/core#"
+    xmlns:works="http://projecthydra.org/ns/works#">
 
   <xsl:output method="xml"/>
   <xsl:variable name="oldns">http://library.ucsd.edu/ark:/20775</xsl:variable>
@@ -32,8 +37,14 @@
       </xsl:for-each>
 
       <!-- subjects -->
-      <xsl:for-each select="//mads:BuiltWorkPlace|//mads:ComplexSubject|//mads:ConferenceName|//mads:CorporateName|//mads:CulturalContext|//mads:FamilyName|//mads:Function|//mads:GenreForm|//mads:Geographic|//mads:Language|//mads:Iconography|//mads:Name|//mads:PersonalName|//mads:ScientificName|//mads:StylePeriod|//mads:Technique|//mads:Temporal|//mads:Topic">
+      <xsl:for-each select="//mads:ComplexSubject">
+        <xsl:call-template name="complex-subject"/>
+      </xsl:for-each>
+      <xsl:for-each select="//mads:BuiltWorkPlace|//mads:ComplexSubject|//mads:CulturalContext|//mads:Function|//mads:GenreForm|//mads:Geographic|//mads:Language|//mads:Iconography|//mads:ScientificName|//mads:StylePeriod|//mads:Technique|//mads:Temporal|//mads:Topic">
         <xsl:call-template name="subject"/>
+      </xsl:for-each>
+      <xsl:for-each select="//mads:ConferenceName|//mads:CorporateName|//mads:FamilyName|//mads:Name|//mads:PersonalName">
+        <xsl:call-template name="agent"/>
       </xsl:for-each>
 
       <!-- files -->
@@ -45,53 +56,88 @@
 
   <xsl:template match="dams:Object">
     <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-    <d5:Object rdf:about="{$id}">
+    <works:GenericWork rdf:about="{$id}">
       <xsl:apply-templates/>
       <rdf:type rdf:resource="http://fedora.info/definitions/v4/indexing#indexable"/>
-      <d5:rights>
-        <dc:RightsStatement rdf:about="{$id}/rights">
-          <xsl:call-template name="rights-statement"/>
-        </dc:RightsStatement>
-      </d5:rights>
-    </d5:Object>
+      <xsl:call-template name="rights-statement"/>
+    </works:GenericWork>
   </xsl:template>
 
   <!-- collection records -->
   <xsl:template name="collection">
     <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-    <d5:Collection rdf:about="{$id}">
+    <works:Collection rdf:about="{$id}">
       <xsl:apply-templates/>
-    </d5:Collection>
+    </works:Collection>
   </xsl:template>
   <xsl:template match="dams:hasAssembledCollection|dams:hasProvenanceCollection|dams:hasPart|dams:hasCollection">
     <xsl:for-each select="dams:AssembledCollection|dams:ProvenanceCollection|dams:ProvenanceCollectionPart">
       <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-      <d5:hasCollection rdf:resource="{$id}"/>
+      <works:memberOf rdf:resource="{$id}"/>
     </xsl:for-each>
-  </xsl:template>
-  <xsl:template match="dams:visibility">
-    <!-- XXX does this map to rights? -->
-    <d5:visibility><xsl:value-of select="."/></d5:visibility>
   </xsl:template>
   <xsl:template name="unit">
     <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-    <d5:Collection rdf:about="{$id}">
-      <dc:title><xsl:value-of select="dams:unitName"/></dc:title>
-      <dc:note><xsl:value-of select="dams:unitDescription"/></dc:note>
-      <!-- <d5:relation rdf:resource="{dams:unitURI}"/> -->
-    </d5:Collection>
+    <works:AdministrativeSet rdf:about="{$id}">
+      <dcterms:title><xsl:value-of select="dams:unitName"/></dcterms:title>
+      <dcterms:description><xsl:value-of select="dams:unitDescription"/></dcterms:description>
+      <dc:relation rdf:resource="{dams:unitURI}"/>
+    </works:AdministrativeSet>
   </xsl:template>
 
+  <xsl:template name="agent">
+    <xsl:if test="mads:authoritativeLabel">
+      <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
+      <edm:Agent rdf:about="{$id}">
+        <skos:prefLabel><xsl:value-of select="mads:authoritativeLabel"/></skos:prefLabel>
+        <xsl:for-each select="mads:isMemberOfMADSScheme/mads:MADSScheme/mads:hasExactExternalAuthority[@rdf:resource]">
+          <skos:inScheme rdf:resource="{@rdf:resource}"/>
+        </xsl:for-each>
+      </edm:Agent>
+    </xsl:if>
+  </xsl:template>
   <xsl:template name="subject">
     <xsl:if test="mads:authoritativeLabel">
       <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
       <skos:Concept rdf:about="{$id}">
         <skos:prefLabel><xsl:value-of select="mads:authoritativeLabel"/></skos:prefLabel>
         <xsl:for-each select="mads:isMemberOfMADSScheme/mads:MADSScheme/mads:hasExactExternalAuthority[@rdf:resource]">
-          <!-- <skos:inScheme rdf:resource="{@rdf:resource}"/> -->
+          <skos:inScheme rdf:resource="{@rdf:resource}"/>
         </xsl:for-each>
-        <!-- XXX concept type topic/geographic/etc.... -->
-        <dc:type><xsl:value-of select="local-name()"/></dc:type>
+      </skos:Concept>
+    </xsl:if>
+  </xsl:template>
+  <xsl:template name="complex-subject">
+    <xsl:if test="mads:authoritativeLabel">
+      <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
+      <skos:Concept rdf:about="{$id}">
+        <skos:prefLabel><xsl:value-of select="mads:authoritativeLabel"/></skos:prefLabel>
+        <xsl:for-each select="mads:isMemberOfMADSScheme/mads:MADSScheme/mads:hasExactExternalAuthority[@rdf:resource]">
+          <skos:inScheme rdf:resource="{@rdf:resource}"/>
+        </xsl:for-each>
+        <xsl:for-each select="mads:componentList/*">
+          <!-- TODO inline subjects -->
+          <xsl:variable name="cid" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
+          <xsl:choose>
+            <xsl:when test="local-name() = 'BuiltWorkPlace'"><d5:builtWorkPlace rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'ConferenceName'"><d5:conferenceName rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'CorporateName'"><d5:corporateName rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'CulturalContext'"><d5:culturalContext rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'FamilyName'"><d5:familyName rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'Function'"><d5:function rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'GenreForm'"><d5:genreForm rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'Geographic'"><d5:geographic rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'Iconography'"><d5:iconography rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'Language'"><d5:language rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'Name'"><d5:name rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'PersonalName'"><d5:personalName rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'ScientificName'"><d5:scientificName rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'StylePeriod'"><d5:stylePeriod rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'Technique'"><d5:technique rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'Temporal'"><d5:temporal rdf:resource="{$cid}"/></xsl:when>
+            <xsl:when test="local-name() = 'Topic'"><d5:topic rdf:resource="{$cid}"/></xsl:when>
+          </xsl:choose>
+        </xsl:for-each>
       </skos:Concept>
     </xsl:if>
   </xsl:template>
@@ -101,15 +147,13 @@
   <!-- cartographics -->
   <xsl:template match="dams:cartographics">
     <xsl:for-each select="dams:Cartographics">
-      <d5:cartographics>
-        <d5:Cartographics>
-          <xsl:for-each select="*">
-            <xsl:element name="d5:{local-name()}">
-              <xsl:value-of select="."/>
-            </xsl:element>
+      <dcterms:spatial>
+        <edm:Place>
+          <xsl:for-each select="dams:point|dams:line|dams:polygon">
+            <gn:geometry><xsl:value-of select="."/></gn:geometry>
           </xsl:for-each>
-        </d5:Cartographics>
-      </d5:cartographics>
+        </edm:Place>
+      </dcterms:spatial>
     </xsl:for-each>
   </xsl:template>
 
@@ -117,7 +161,7 @@
   <xsl:template match="dams:assembledCollection|dams:provenanceCollection|dams:provenanceCollectionPart">
     <xsl:for-each select="dams:AssembledCollection|dams:ProvenanceCollection|dams:ProvenanceCollectionPart">
       <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-      <d5:collection rdf:resource="{$id}"/>
+      <works:memberOf rdf:resource="{$id}"/>
     </xsl:for-each>
   </xsl:template>
 
@@ -125,14 +169,15 @@
   <xsl:template match="dams:hasComponent">
     <xsl:for-each select="dams:Component">
       <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-      <d5:component>
-        <d5:Component rdf:about="{$id}">
+      <works:hasMember>
+        <works:GenericWork rdf:about="{$id}">
           <xsl:apply-templates/>
-        </d5:Component>
-      </d5:component>
+        </works:GenericWork>
+      </works:hasMember>
     </xsl:for-each>
   </xsl:template>
   <xsl:template match="dams:order">
+    <!-- TODO ore proxy -->
     <d5:order><xsl:value-of select="."/></d5:order>
   </xsl:template>
 
@@ -141,95 +186,218 @@
     <xsl:for-each select="dams:Date">
       <xsl:choose>
         <xsl:when test="dams:type = 'creation' or dams:type = 'created'">
-          <dc:created><xsl:value-of select="rdf:value"/></dc:created>
+          <dcterms:created><xsl:call-template name="timespan"/></dcterms:created>
         </xsl:when>
         <xsl:when test="dams:type = 'collected' or dams:type = 'date collected'">
-          <d5:dateCollected><xsl:value-of select="rdf:value"/></d5:dateCollected>
+          <d5:collectionDate><xsl:call-template name="timespan"/></d5:collectionDate>
         </xsl:when>
         <xsl:when test="dams:type = 'event'">
-          <d5:eventDate><xsl:value-of select="rdf:value"/></d5:eventDate>
+          <d5:eventDate><xsl:call-template name="timespan"/></d5:eventDate>
         </xsl:when>
         <xsl:when test="dams:type = 'copyright'">
-          <dc:dateCopyrighted><xsl:value-of select="rdf:value"/></dc:dateCopyrighted>
+          <dcterms:copyright><xsl:call-template name="timespan"/></dcterms:copyright>
+        </xsl:when>
+        <xsl:when test="dams:type = 'issued' or dams:type = 'date issued'">
+          <dcterms:issued><xsl:call-template name="timespan"/></dcterms:issued>
         </xsl:when>
         <xsl:otherwise>
-          <dc:date><xsl:value-of select="rdf:value"/></dc:date>
+          <dc:date><xsl:call-template name="timespan"/></dc:date>
         </xsl:otherwise>
       </xsl:choose>
     </xsl:for-each>
   </xsl:template>
+  <xsl:template name="timespan">
+    <edm:TimeSpan>
+      <xsl:if test="rdf:value != ''">
+        <skos:prefLabel><xsl:value-of select="rdf:value"/></skos:prefLabel>
+      </xsl:if>
+      <xsl:if test="dams:beginDate != ''">
+        <edm:begin><xsl:value-of select="dams:beginDate"/></edm:begin>
+      </xsl:if>
+      <xsl:if test="dams:endDate != ''">
+        <edm:end><xsl:value-of select="dams:endDate"/></edm:end>
+      </xsl:if>
+    </edm:TimeSpan>
+  </xsl:template>
 
   <!-- events -->
   <xsl:template match="dams:event"/>
+  <!-- TODO events -->
 
   <!-- files -->
   <xsl:template match="dams:hasFile"/>
   <xsl:template name="files">
     <xsl:for-each select="//dams:File">
       <xsl:variable name="fid" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-      <rdf:Description rdf:about="{$fid}/fcr:metadata">
-        <d5:compositionLevel><xsl:value-of select="dams:compositionLevel"/></d5:compositionLevel>
-        <d5:dateCreated><xsl:value-of select="dams:dateCreated"/></d5:dateCreated>
-        <d5:formatName><xsl:value-of select="dams:formatName"/></d5:formatName>
-        <d5:formatVersion><xsl:value-of select="dams:formatVersion"/></d5:formatVersion>
-        <d5:objectCategory><xsl:value-of select="dams:objectCategory"/></d5:objectCategory>
-        <d5:preservationLevel><xsl:value-of select="dams:preservationLevel"/></d5:preservationLevel>
-        <d5:quality><xsl:value-of select="dams:quality"/></d5:quality>
-        <d5:use><xsl:value-of select="dams:use"/></d5:use>
+      <works:GenericFile rdf:about="{$fid}/fcr:metadata">
+        <dc:format><xsl:value-of select="dams:mimeType"/></dc:format>
+        <premis:dateCreatedByApplication><xsl:value-of select="dams:dateCreated"/></premis:dateCreatedByApplication>
+        <premis:hasSize><xsl:value-of select="dams:size"/></premis:hasSize>
         <xsl:for-each select="dams:crc32checksum">
-          <d5:digest>urn:crc32:<xsl:value-of select="."/></d5:digest>
+          <premis:hasMessageDigest rdf:resource="urn:crc32:{.}"/>
         </xsl:for-each>
         <xsl:for-each select="dams:md5checksum">
-          <d5:digest>urn:md5:<xsl:value-of select="."/></d5:digest>
+          <premis:hasMessageDigest rdf:resource="urn:md5:{.}"/>
         </xsl:for-each>
         <xsl:for-each select="dams:sha1checksum">
-          <d5:digest>urn:sha1:<xsl:value-of select="."/></d5:digest>
+          <premis:hasMessageDigest rdf:resource="urn:sha1:{.}"/>
         </xsl:for-each>
-        <d5:mimeType><xsl:value-of select="dams:mimeType"/></d5:mimeType>
-        <!-- <xsl:for-each select="dams:sourceFileName">
+        <xsl:for-each select="dams:sourceFileName">
           <premis:hasOriginalName><xsl:value-of select="."/></premis:hasOriginalName>
-        </xsl:for-each> -->
+        </xsl:for-each>
+        <premis:hasFormatName><xsl:value-of select="dams:formatName"/></premis:hasFormatName>
+        <premis:hasFormatVersion><xsl:value-of select="dams:formatVersion"/></premis:hasFormatVersion>
+        <premis:hasObjectCategory><xsl:value-of select="dams:objectCategory"/></premis:hasObjectCategory>
+        <premis:hasPreservationLevel><xsl:value-of select="dams:preservationLevel"/></premis:hasPreservationLevel>
+        <d5:quality><xsl:value-of select="dams:quality"/></d5:quality>
         <xsl:for-each select="dams:sourcePath">
           <d5:sourcePath><xsl:value-of select="."/></d5:sourcePath>
         </xsl:for-each>
-        <d5:size><xsl:value-of select="dams:size"/></d5:size>
-      </rdf:Description>
+
+        <!-- mix -->
+        <xsl:for-each select="mix:sourceType">
+          <mix:sourceType><xsl:value-of select="dams:sourceType"/></mix:sourceType>
+        </xsl:for-each>
+        <xsl:for-each select="mix:imageProducer">
+          <mix:imageProducer><xsl:value-of select="dams:imageProducer"/></mix:imageProducer>
+        </xsl:for-each>
+        <xsl:for-each select="mix:captureSource">
+          <mix:captureSource><xsl:value-of select="dams:captureSource"/></mix:captureSource>
+        </xsl:for-each>
+        <xsl:for-each select="mix:scannerManufacturer">
+          <mix:scannerManufacturer><xsl:value-of select="dams:scannerManufacturer"/></mix:scannerManufacturer>
+        </xsl:for-each>
+        <xsl:for-each select="mix:scannerModelName">
+          <mix:scannerModelName><xsl:value-of select="dams:scannerModelName"/></mix:scannerModelName>
+        </xsl:for-each>
+        <xsl:for-each select="mix:scanningSoftware">
+          <mix:scanningSoftware><xsl:value-of select="dams:scanningSoftware"/></mix:scanningSoftware>
+        </xsl:for-each>
+        <xsl:for-each select="mix:scanningSoftwareVersion">
+          <mix:scanningSoftwareVersion><xsl:value-of select="dams:scanningSoftwareVersion"/></mix:scanningSoftwareVersion>
+        </xsl:for-each>
+
+        <d5:use><xsl:value-of select="dams:use"/></d5:use> <!-- TODO convert to ds name -->
+      </works:GenericFile>
     </xsl:for-each>
   </xsl:template>
 
   <!-- mads subjects -->
   <xsl:template match="dams:builtWorkPlace|dams:conferenceName|dams:corporateName|dams:culturalContext|dams:familyName|dams:function|dams:genreForm|dams:geographic|dams:language|dams:iconography|dams:name|dams:otherName|dams:personalName|dams:scientificName|dams:stylePeriod|dams:technique|dams:temporal|dams:topic">
-    <xsl:for-each select="*">
-      <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-      <d5:subject rdf:resource="{$id}"/>
-    </xsl:for-each>
+    <xsl:element name="d5:{local-name()}">
+      <xsl:attribute name="rdf:resource">
+        <xsl:value-of select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
+      </xsl:attribute>
+    </xsl:element>
   </xsl:template>
   <xsl:template match="dams:complexSubject">
-    <xsl:for-each select="mads:ComplexSubject">
-      <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-      <d5:subject rdf:resource="{$id}"/>
-    </xsl:for-each>
+    <d5:complexSubject rdf:resource="{concat($repositoryURL, substring-after(@rdf:about, $oldns))}"/>
   </xsl:template>
 
   <!-- notes -->
   <xsl:template match="dams:note">
     <xsl:for-each select="dams:Note">
       <xsl:choose>
-        <xsl:when test="dams:type = 'identifier' and dams:displayLabel = 'ARK'">
-          <d5:ark><xsl:value-of select="rdf:value"/></d5:ark>
-        </xsl:when>
         <xsl:when test="dams:type = 'identifier'">
-          <d5:identifier><xsl:value-of select="rdf:value"/></d5:identifier>
+          <dcterms:identifier rdf:resource="urn:{dams:displayLabel}:{rdf:value}"/>
         </xsl:when>
         <xsl:when test="dams:type = 'extent'">
-          <d5:extent><xsl:value-of select="rdf:value"/></d5:extent>
+          <dcterms:extent><xsl:value-of select="rdf:value"/></dcterms:extent>
         </xsl:when>
         <xsl:when test="dams:type = 'preferred citation'">
-          <d5:preferredCitation><xsl:value-of select="rdf:value"/></d5:preferredCitation>
+          <dcterms:bibliographicCitation><xsl:value-of select="rdf:value"/></dcterms:bibliographicCitation>
+        </xsl:when>
+        <xsl:when test="dams:type = 'table of contents'">
+          <dcterms:tableOfContents><xsl:value-of select="rdf:value"/></dcterms:tableOfContents>
+        </xsl:when>
+        <xsl:when test="dams:type = 'arrangement'">
+          <d5:arrangement><xsl:value-of select="rdf:value"/></d5:arrangement>
+        </xsl:when>
+        <xsl:when test="dams:type = 'bibliography'">
+          <d5:bibliography><xsl:value-of select="rdf:value"/></d5:bibliography>
+        </xsl:when>
+        <xsl:when test="dams:type = 'biography'">
+          <d5:biography><xsl:value-of select="rdf:value"/></d5:biography>
+        </xsl:when>
+        <xsl:when test="dams:type = 'classification'">
+          <d5:classification><xsl:value-of select="rdf:value"/></d5:classification>
+        </xsl:when>
+        <xsl:when test="dams:type = 'credits'">
+          <d5:credits><xsl:value-of select="rdf:value"/></d5:credits>
+        </xsl:when>
+        <xsl:when test="dams:type = 'custodial history'">
+          <d5:custodialHistory><xsl:value-of select="rdf:value"/></d5:custodialHistory>
+        </xsl:when>
+        <xsl:when test="dams:type = 'digital origin'">
+          <d5:digitalOrigin><xsl:value-of select="rdf:value"/></d5:digitalOrigin>
+        </xsl:when>
+        <xsl:when test="dams:type = 'edition'">
+          <d5:edition><xsl:value-of select="rdf:value"/></d5:edition>
+        </xsl:when>
+        <xsl:when test="dams:type = 'inscription'">
+          <d5:inscription><xsl:value-of select="rdf:value"/></d5:inscription>
+        </xsl:when>
+        <xsl:when test="dams:type = 'local attribution'">
+          <d5:localAttribution><xsl:value-of select="rdf:value"/></d5:localAttribution>
+        </xsl:when>
+        <xsl:when test="dams:type = 'location of originals'">
+          <d5:locationOfOriginals><xsl:value-of select="rdf:value"/></d5:locationOfOriginals>
+        </xsl:when>
+        <xsl:when test="dams:type = 'material details'">
+          <xsl:choose>
+            <xsl:when test="dams:displaLabel = 'finds'">
+              <d5:finds><xsl:value-of select="rdf:value"/></d5:finds>
+            </xsl:when>
+            <xsl:when test="dams:displaLabel = 'limits'">
+              <d5:limits><xsl:value-of select="rdf:value"/></d5:limits>
+            </xsl:when>
+            <xsl:when test="dams:displaLabel = 'relationship to other loci'">
+              <d5:relationshipToOtherLoci><xsl:value-of select="rdf:value"/></d5:relationshipToOtherLoci>
+            </xsl:when>
+            <xsl:when test="dams:displaLabel = 'storage method'">
+              <d5:storageMethod><xsl:value-of select="rdf:value"/></d5:storageMethod>
+            </xsl:when>
+            <xsl:when test="dams:displaLabel = 'water depth'">
+              <d5:waterDepth><xsl:value-of select="rdf:value"/></d5:waterDepth>
+            </xsl:when>
+            <xsl:otherwise>
+              <d5:materialDetails><xsl:value-of select="rdf:value"/></d5:materialDetails>
+            </xsl:otherwise>
+          </xsl:choose>
+        </xsl:when>
+        <xsl:when test="dams:type = 'performers'">
+          <d5:performers><xsl:value-of select="rdf:value"/></d5:performers>
+        </xsl:when>
+        <xsl:when test="dams:type = 'physical description'">
+          <d5:physicalDescription><xsl:value-of select="rdf:value"/></d5:physicalDescription>
+        </xsl:when>
+        <xsl:when test="dams:type = 'publication'">
+          <d5:publication><xsl:value-of select="rdf:value"/></d5:publication>
+        </xsl:when>
+        <xsl:when test="dams:type = 'scope and content'">
+          <d5:scopeAndContent><xsl:value-of select="rdf:value"/></d5:scopeAndContent>
+        </xsl:when>
+        <xsl:when test="dams:type = 'series'">
+          <d5:series><xsl:value-of select="rdf:value"/></d5:series>
+        </xsl:when>
+        <xsl:when test="dams:type = 'statement of responsibility'">
+          <d5:statementOfResponsibility><xsl:value-of select="rdf:value"/></d5:statementOfResponsibility>
+        </xsl:when>
+        <xsl:when test="dams:type = 'technical requirements'">
+          <d5:techincalRequirements><xsl:value-of select="rdf:value"/></d5:techincalRequirements>
+        </xsl:when>
+        <xsl:when test="dams:type = 'thesis'">
+          <d5:thesis><xsl:value-of select="rdf:value"/></d5:thesis>
+        </xsl:when>
+        <xsl:when test="dams:type = 'venue'">
+          <d5:venue><xsl:value-of select="rdf:value"/></d5:venue>
+        </xsl:when>
+        <!-- TODO is this different from dcterms:description? -->
+        <xsl:when test="dams:type = 'ZZZ'">
+          <d5:generalNote><xsl:value-of select="rdf:value"/></d5:generalNote>
         </xsl:when>
         <xsl:otherwise>
-          <!-- TODO other notes types that need special handling? -->
-          <d5:note><xsl:value-of select="rdf:value"/></d5:note>
+          <dcterms:description><xsl:value-of select="rdf:value"/></dcterms:description>
         </xsl:otherwise>
       </xsl:choose>
     </xsl:for-each>
@@ -243,14 +411,24 @@
   <!-- related resources -->
   <xsl:template match="dams:relatedResource">
     <xsl:for-each select="dams:RelatedResource">
-      <!-- link if rdf:about, inline if not -->
       <xsl:choose>
         <xsl:when test="@rdf:about">
           <xsl:variable name="tmp" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
           <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-          <d5:relatedResource rdf:resource="{$id}"/>
+
+          <xsl:choose>
+            <xsl:when test="dams:type='area'"><d5:area rdf:resource="{$id}"/></xsl:when>
+            <xsl:when test="dams:type='depiction'"><d5:depiction rdf:resource="{$id}"/></xsl:when>
+            <xsl:when test="dams:type='online exhibit'"><d5:exhibit rdf:resource="{$id}"/></xsl:when>
+            <xsl:when test="dams:type='online finding aid'">d5:findingAid rdf:resource="{$id}"/></xsl:when>
+            <xsl:when test="dams:type='locus'"><d5:locus rdf:resource="{$id}"/></xsl:when>
+            <xsl:when test="dams:type='news release'"><d5:newsRelease rdf:resource="{$id}"/></xsl:when>
+            <xsl:when test="dams:type='stratum'"><d5:stratum rdf:resource="{$id}"/></xsl:when>
+            <xsl:otherwise><dcterms:relation rdf:resource="{$id}"/></xsl:otherwise>
+          </xsl:choose>
         </xsl:when>
         <xsl:otherwise>
+          <!-- TODO directly attach thumbnail, or link to URL? -->
           <d5:thumbnail rdf:resource="{dams:uri/@rdf:resource|dams:uri/text()}"/>
         </xsl:otherwise>
       </xsl:choose>
@@ -261,34 +439,31 @@
   <xsl:template match="dams:relationship">
     <xsl:for-each select="dams:Relationship">
       <xsl:variable name="roleid" select="dams:role/@rdf:resource"/>
-      <xsl:variable name="rolename">
+
+      <xsl:variable name="code">
         <xsl:choose>
-          <xsl:when test="dams:role/mads:Authority/mads:authoritativeLabel">
-            <xsl:value-of select="dams:role/mads:Authority/mads:authoritativeLabel"/>
+          <xsl:when test="dams:role/mads:Authority/mads:code">
+            <xsl:value-of select="dams:role/mads:Authority/mads:code"/>
           </xsl:when>
-          <xsl:when test="//mads:Authority[@rdf:about=$roleid]/mads:authoritativeLabel">
-            <xsl:value-of select="//mads:Authority[@rdf:about=$roleid]/mads:authoritativeLabel"/>
+          <xsl:when test="//mads:Authority[@rdf:about=$roleid]/mads:code">
+            <xsl:value-of select="//mads:Authority[@rdf:about=$roleid]/mads:code"/>
           </xsl:when>
+          <xsl:when test="dams:role/mads:Authority[mads:authoritativeLabel='donor']">dnr</xsl:when>
+          <xsl:when test="dams:role/mads:Authority[mads:authoritativeLabel='producer']">pro</xsl:when>
         </xsl:choose>
       </xsl:variable>
-      <xsl:variable name="role">
+
+      <xsl:variable name="ns">
         <xsl:choose>
-          <xsl:when test="$rolename = 'Former owner'">formerOwner</xsl:when>
-          <xsl:when test="$rolename = 'Principal investigator'">principalInvestigator</xsl:when>
-          <xsl:when test="$rolename = 'Research team head'">researchTeamHead</xsl:when>
-          <xsl:when test="$rolename = 'Research team member'">researchTeamMember</xsl:when>
-          <!-- XXX: need better value processing... -->
-          <xsl:when test="$rolename">
-            <xsl:value-of select="translate($rolename, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ()', 'abcdefghijklmnopqrstuvwxyz___')"/>
-          </xsl:when>
-          <xsl:otherwise>creator</xsl:otherwise>
+          <xsl:when test="$code = 'cpi' or $code = 'pri'">d5</xsl:when>
+          <xsl:otherwise>marcrel</xsl:otherwise>
         </xsl:choose>
       </xsl:variable>
 
       <xsl:variable name="name" select="dams:personalName/mads:PersonalName/@rdf:about|dams:corporateName/mads:CorporateName/@rdf:about|dams:conferenceName/mads:ConferenceName/@rdf:about|dams:familyName/mads:FamilyName/@rdf:about|dams:otherName/mads:Name/@rdf:about|dams:name/mads:Name/@rdf:about|dams:personalName/@rdf:resource|dams:corporateName/@rdf:resource|dams:conferenceName/@rdf:resource|dams:familyName/@rdf:resource|dams:otherName/@rdf:resource/dams:name/@rdf:resource"/>
       <xsl:variable name="nameid" select="concat($repositoryURL, substring-after($name, $oldns))"/>
 
-      <xsl:element name="d5:{$role}">
+      <xsl:element name="{$ns}:{$code}">
         <xsl:attribute name="rdf:resource"><xsl:value-of select="$nameid"/></xsl:attribute>
       </xsl:element>
     </xsl:for-each>
@@ -306,7 +481,13 @@
   <xsl:template match="dams:statute"/>
 
   <!-- new hydra-plus rights statement -->
+  <xsl:template match="dams:visibility">
+    <!-- TODO does this map to rights? -->
+    <d5:visibility><xsl:value-of select="."/></d5:visibility>
+  </xsl:template>
   <xsl:template name="rights-statement">
+      <!-- TODO dcterms:rights = {xsd:anyURI}  pending rights discussion and vocab -->
+
       <xsl:for-each select="dams:copyright/dams:Copyright">
         <xsl:for-each select="dams:copyrightJurisdiction">
           <premis:hasCopyrightJurisdiction><xsl:value-of select="."/></premis:hasCopyrightJurisdiction>
@@ -327,7 +508,7 @@
               <premis:hasLicenseTerms><xsl:value-of select="."/></premis:hasLicenseTerms>
             </xsl:for-each>
             <xsl:for-each select="dams:restriction/dams:Restriction/dams:endDate">
-              <hydra:embargoExpires><xsl:value-of select="."/></hydra:embargoExpires>
+              <rights:embargoExpires><xsl:value-of select="."/></rights:embargoExpires>
             </xsl:for-each>
           </xsl:otherwise>
         </xsl:choose>
@@ -339,7 +520,7 @@
 
       <xsl:for-each select="dams:rightsHolder/*|dams:rightsHolderCorporate/*|dams:rightsHolderPersonal/*">
         <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
-        <d5:rightsHolder rdf:resource="{$id}"/>
+        <dcterms:rightsHolder rdf:resource="{$id}"/>
       </xsl:for-each>
 
       <xsl:for-each select="dams:statute">
@@ -351,28 +532,63 @@
   <xsl:template match="dams:title">
     <xsl:for-each select="mads:Title">
       <xsl:for-each select="mads:elementList/mads:MainTitleElement">
-        <dc:title><xsl:value-of select="mads:elementValue"/></dc:title>
+        <dcterms:title><xsl:value-of select="mads:elementValue"/></dcterms:title>
       </xsl:for-each>
       <xsl:for-each select="mads:elementList/mads:SubTitleElement">
         <d5:subtitle><xsl:value-of select="mads:elementValue"/></d5:subtitle>
       </xsl:for-each>
       <xsl:for-each select="mads:elementList/mads:PartNameElement">
-        <d5:partName><xsl:value-of select="mads:elementValue"/></d5:partName>
+        <modsrdf:partName><xsl:value-of select="mads:elementValue"/></modsrdf:partName>
       </xsl:for-each>
       <xsl:for-each select="mads:elementList/mads:PartNumberElement">
-        <d5:partNumber><xsl:value-of select="mads:elementValue"/></d5:partNumber>
+        <modsrdf:partNumber><xsl:value-of select="mads:elementValue"/></modsrdf:partNumber>
       </xsl:for-each>
-      <xsl:for-each select="mads:hasVariant/mads:Variant">
-        <d5:alternateTitle><xsl:value-of select="mads:variantLabel"/></d5:alternateTitle>
-      </xsl:for-each>
-      <xsl:for-each select="mads:hasTranslationVariant/mads:Variant">
-        <d5:translatedTitle><xsl:value-of select="mads:variantLabel"/></d5:translatedTitle>
+      <xsl:for-each select="mads:hasVariant/mads:Variant|mads:hasTranslationVariant/mads:Variant">
+        <dcterms:alternative><xsl:value-of select="mads:variantLabel"/></dcterms:alternative>
       </xsl:for-each>
     </xsl:for-each>
   </xsl:template>
 
   <xsl:template match="dams:typeOfResource">
-    <dc:type><xsl:value-of select="."/></dc:type>
+    <xsl:choose>
+      <xsl:when test="text() = 'image'">
+        <dcterms:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+      </xsl:when>
+      <xsl:when test="text() = 'text'">
+        <dcterms:type rdf:resource="http://purl.org/dc/dcmitype/Text"/>
+      </xsl:when>
+      <xsl:when test="text() = 'data'">
+        <dcterms:type rdf:resource="http://purl.org/dc/dcmitype/Dataset"/>
+      </xsl:when>
+      <xsl:when test="text() = 'sound recording'">
+        <dcterms:type rdf:resource="http://purl.org/dc/dcmitype/Sound"/>
+      </xsl:when>
+      <xsl:when test="text() = 'sound recording-nonmusical'">
+        <dcterms:type rdf:resource="http://purl.org/dc/dcmitype/Sound"/>
+      </xsl:when>
+      <xsl:when test="text() = 'video'">
+        <dcterms:type rdf:resource="http://purl.org/dc/dcmitype/MovingImage"/>
+      </xsl:when>
+    </xsl:choose>
+<!--
+DCMIType vocab:
+	http://purl.org/dc/dcmitype/Collection
+	http://purl.org/dc/dcmitype/Dataset
+	http://purl.org/dc/dcmitype/Event
+	http://purl.org/dc/dcmitype/Image
+	http://purl.org/dc/dcmitype/InteractiveResource
+	http://purl.org/dc/dcmitype/MovingImage
+	http://purl.org/dc/dcmitype/PhysicalObject
+	http://purl.org/dc/dcmitype/Service
+	http://purl.org/dc/dcmitype/Software
+	http://purl.org/dc/dcmitype/Sound
+	http://purl.org/dc/dcmitype/StillImage
+	http://purl.org/dc/dcmitype/Text
+
+TODO Unmapped values:
+	Cartographic - can just skip because these also have image or text
+	Mixed material - only 69 of these, but they don't have any other types
+-->
   </xsl:template>
 
   <xsl:template match="dams:unit">
@@ -389,7 +605,7 @@
         </xsl:otherwise>
       </xsl:choose>
     </xsl:variable>
-    <d5:collection rdf:resource="{$id}"/>
+    <works:isContainedBy rdf:resource="{$id}"/>
   </xsl:template>
 
   <xsl:template match="*">
