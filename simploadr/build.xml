@@ -7,7 +7,6 @@
   <property name="java"      value="${src}/java"/>
   <property name="lib"       value="${src}/lib"/>
   <property name="props"     value="${src}/properties"/>
-  <property name="xsl"       value="${src}/xsl"/>
   <property name="tmp"       value="${basedir}/tmp"/>
 
   <path id="classpath">
@@ -15,7 +14,7 @@
   </path>
   <path id="execpath">
     <pathelement location="${tmp}/classes"/>
-    <pathelement location="${xsl}"/>
+    <pathelement location="${xsl.dir}"/>
     <fileset dir="${lib}" includes="**/*.jar"/>
   </path>
 

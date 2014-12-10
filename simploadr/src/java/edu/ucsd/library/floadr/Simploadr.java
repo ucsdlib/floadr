@@ -84,9 +84,9 @@ public class Simploadr {
         pool.setDefaultMaxPerRoute(Integer.MAX_VALUE);
         client = new DefaultHttpClient(pool);
 
-        // load goldilocks.xsl
+        // load dams5.xsl
         final StreamSource xsl = new StreamSource(Simploadr.class.getClassLoader()
-                .getResourceAsStream("goldilocks.xsl"));
+                .getResourceAsStream("dams5.xsl"));
         xslt = TransformerFactory.newInstance().newTransformer(xsl);
         xslt.setParameter("repositoryURL", repositoryURL);
 
@@ -96,7 +96,6 @@ public class Simploadr {
         for ( String id = null; (id = objectIdReader.readLine()) != null; ) {
             records++;
             final String pairPath = pairPath(id);
-            System.out.println("Node: " + pairPath);
             final File objDir = new File( sourceDir, pairPath );
             final File[] objFiles = objDir.listFiles();
             if ( objFiles.length > 0 ) {
@@ -118,7 +117,7 @@ public class Simploadr {
                     loadMetadata( id, metaFile, merge );
                 }
             }
-            System.out.println(records + ", metadata: " + recordsUpdated + ", files: " + filesCreated + ", skipped: " + filesSkipped + ", errors: " + errors);
+            System.out.println(records + ": " + id + ", metadata: " + recordsUpdated + ", files: " + filesCreated + ", skipped: " + filesSkipped + ", errors: " + errors);
         }
     }
 
@@ -173,12 +172,14 @@ public class Simploadr {
             Document doc = result.getDocument();
 
             // create linked records
-            createObject( objPath(objid) + "rights");
             final List links = doc.selectNodes("//*[@rdf:resource]|//*[@rdf:about]");
             for ( Iterator it = links.iterator(); it.hasNext(); ) {
                 Element e = (Element)it.next();
                 Attribute about = e.attribute(0);
                 String linkPath = about.getValue();
+                if ( linkPath.equals(repositoryURL) ) {
+                    System.err.println("XXX: " + e.asXML());
+                }
                 if ( linkPath.startsWith(repositoryURL) ) {
                     linkPath = fixLink(linkPath, repositoryURL);
                     about.setValue(repositoryURL + linkPath);
@@ -209,7 +210,6 @@ public class Simploadr {
             }
 
             // update metadata
-            System.out.println( objid + ": updating metadata");
             int status = execute(put, true);
             if ( status == 204 ) {
                 recordsUpdated++;
@@ -245,6 +245,9 @@ public class Simploadr {
 
     private static int execute( HttpRequestBase request, boolean verbose ) {
         try {
+            if ( request.getURI().toString().indexOf("/:/") != -1 ) {
+                throw new Exception("Invalid URL: " + request.getURI());
+            }
             HttpResponse response = client.execute(request);
             int status = response.getStatusLine().getStatusCode();
             if ( verbose && status > 399 ) {
