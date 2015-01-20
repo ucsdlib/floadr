@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.StringWriter;
 
@@ -24,6 +25,7 @@ import org.dom4j.Document;
 import org.dom4j.Element;
 import org.dom4j.Node;
 import org.dom4j.io.DocumentResult;
+import org.dom4j.io.XMLWriter;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -52,6 +54,7 @@ import com.hp.hpl.jena.rdf.model.StmtIterator;
 **/
 public class Simploadr {
 
+    private static boolean debug = false;
     private static MimetypesFileTypeMap mimeTypes = new MimetypesFileTypeMap();
     private static int errors = 0;
     private static int recordsUpdated = 0;
@@ -84,9 +87,9 @@ public class Simploadr {
         pool.setDefaultMaxPerRoute(Integer.MAX_VALUE);
         client = new DefaultHttpClient(pool);
 
-        // load dams5.xsl
+        // load dams4.2.xsl
         final StreamSource xsl = new StreamSource(Simploadr.class.getClassLoader()
-                .getResourceAsStream("dams5.xsl"));
+                .getResourceAsStream("dams4.2.xsl"));
         xslt = TransformerFactory.newInstance().newTransformer(xsl);
         xslt.setParameter("repositoryURL", repositoryURL);
 
@@ -123,7 +126,7 @@ public class Simploadr {
 
     private static void createObject( String path ) {
         String objectURI = repositoryURL + path;
-        if ( !exists(path) ) {
+        if ( !debug && !exists(path) ) {
             HttpPut put = new HttpPut( objectURI );
             int status = execute(put, true);
             if ( status != 201 ) {
@@ -140,7 +143,7 @@ public class Simploadr {
                 final String fileId = fileId( objid, fn );
                 final String dsPath = objPath(objid) + fileId;
                 String fileURI = repositoryURL + dsPath;
-                if ( exists(dsPath) ) {
+                if ( !debug && exists(dsPath) ) {
                     System.out.println("  Skipped: " + fn);
                     filesSkipped++;
                 } else {
@@ -149,7 +152,7 @@ public class Simploadr {
                     put.addHeader( "Content-Type", mimeTypes.getContentType(dsFile) );
                     put.setEntity( new FileEntity(dsFile) );
                     int status = execute(put, true);
-                    if ( status == 201 ) {
+                    if ( status == 201 || debug ) {
                         System.out.println("File: " + dsPath);
                         filesCreated++;
                     } else {
@@ -187,9 +190,20 @@ public class Simploadr {
                 }
             }
 
+            if ( debug ) {
+                File f = new File("debug/" + objid + ".dams42.xml");
+                if ( ! f.getParentFile().exists() ) {
+                    f.getParentFile().mkdirs();
+                    System.out.println("writing debug output to: " + f.getParentFile().getAbsolutePath());
+                }
+                XMLWriter w = new XMLWriter( new FileWriter(f) );
+                w.write(doc);
+                w.close();
+            }
+
             HttpPut put = new HttpPut(repositoryURL + objPath(objid));
             put.addHeader( "Content-Type", "application/rdf+xml" );
-            if ( merge ) {
+            if ( merge && !debug ) {
                 // load RDF from repo
                 System.out.println( objid + ": merging metadata");
                 HttpGet get = new HttpGet( repositoryURL + objPath(objid) );
@@ -211,7 +225,7 @@ public class Simploadr {
 
             // update metadata
             int status = execute(put, true);
-            if ( status == 204 ) {
+            if ( status == 204 || debug ) {
                 recordsUpdated++;
             } else {
                 System.out.println("meta: " + status);
@@ -244,6 +258,7 @@ public class Simploadr {
     }
 
     private static int execute( HttpRequestBase request, boolean verbose ) {
+        if ( debug ) { return 200; }
         try {
             if ( request.getURI().toString().indexOf("/:/") != -1 ) {
                 throw new Exception("Invalid URL: " + request.getURI());
