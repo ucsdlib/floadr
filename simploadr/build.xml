@@ -56,4 +56,32 @@
     </java>
   </target>
 
+  <!-- transformr -->
+  <target name="transform" description="Transform files">
+    <echo message="x.src: ${x.src}"/>
+    <echo message="x.dst: ${x.dst}"/>
+    <echo message="x.files: ${x.files}"/>
+    <echo message="x.url: ${x.url}"/>
+    <java classname="edu.ucsd.library.floadr.Transformr" classpathref="execpath">
+      <arg line="${x.src} ${x.dst} ${x.files} ${x.url}"/>
+    </java>
+  </target>
+
+  <!-- pokr -->
+  <target name="poke" description="Create URLs in Fedora 4">
+    <echo message="p.urls: ${p.urls}"/>
+    <echo message="p.src.: ${p.src}"/>
+    <java classname="edu.ucsd.library.floadr.Pokr" classpathref="execpath">
+      <arg line="${p.urls} ${p.src}"/>
+    </java>
+  </target>
+
+  <!-- pushr -->
+  <target name="push" description="Push files into Fedora 4">
+    <echo message="p.src: ${p.src}"/>
+    <java classname="edu.ucsd.library.floadr.Pushr" classpathref="execpath">
+      <arg line="${p.src}"/>
+    </java>
+  </target>
+
 </project>
