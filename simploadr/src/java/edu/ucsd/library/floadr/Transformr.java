@@ -81,18 +81,26 @@ public class Transformr {
 
         // create resource stub records
         long start = System.currentTimeMillis();
+        System.out.println("Creating resource stubs:");
         for ( Iterator<String> it = resourceSet.iterator(); it.hasNext(); ) {
             createResource(it.next());
+            if ( resourceCount % 1000 == 0 ) {
+                System.out.println("  " + resourceCount);
+            }
         }
         long dur = System.currentTimeMillis() - start;
-        System.out.println("created " + resourceCount + " stub resources in " + (dur/1000) + " sec");
+        System.out.println("created " + resourceCount + " resource stubs in " + (dur/1000) + " sec");
 
         // output file URLs
+        System.out.println("Listing files:");
         PrintWriter fileout = new PrintWriter( new FileWriter(filesFile) );
         int fileCount = 0;
         for ( Iterator<String> it = fileSet.iterator(); it.hasNext(); ) {
             fileout.println( repositoryURL + it.next() );
             fileCount++;
+            if ( fileCount % 1000 == 0 ) {
+                System.out.println("  " + fileCount);
+            }
         }
         fileout.close();
         System.out.println("wrote " + fileCount + " file URLs to " + filesFile.getName());
@@ -106,7 +114,7 @@ public class Transformr {
             HttpResponse response = client.execute(put);
             status = response.getStatusLine().getStatusCode();
         } catch ( Exception ex ) {
-            System.out.println("Error: " + ex.toString());
+            System.out.println("Error: " + ex.toString() + ", path: '" + path + "'");
             status = -1;
         } finally {
             put.releaseConnection();
