@@ -31,11 +31,11 @@ import org.apache.http.impl.conn.PoolingClientConnectionManager;
 
 
 /**
- * Utility to transform dams4 rdf to dams42, and output URLs of linked resources
+ * Utility to transform metadata using XSLT, and output URLs of linked resources
  * @author escowles
  * @since 2015-01-27
 **/
-public class Transformr {
+public class Transform {
 
     private static int errors = 0;
     private static String repositoryURL;
@@ -47,8 +47,8 @@ public class Transformr {
 
     /**
      * Command-line operation.
-     * @param args Command-line arguments: 0: dams4 rdf source directory
-     *     1: dams42 rdf destination directory
+     * @param args Command-line arguments: 0: xml source directory
+     *     1: rdf/xml output destination directory
      *     2: file URL list destination file
      *     3: repository base URL
     **/
@@ -56,16 +56,17 @@ public class Transformr {
         File sourceDir = new File(args[0]);
         File destDir = new File(args[1]);
         File filesFile = new File(args[2]);
-        repositoryURL = args[3];
+        String stylesheet = args[3];
+        repositoryURL = args[4];
 
         PoolingClientConnectionManager pool = new PoolingClientConnectionManager();
         pool.setMaxTotal(Integer.MAX_VALUE);
         pool.setDefaultMaxPerRoute(Integer.MAX_VALUE);
         client = new DefaultHttpClient(pool);
 
-        // load dams4.2.xsl
-        final StreamSource xsl = new StreamSource(Simploadr.class.getClassLoader()
-                .getResourceAsStream("dams4.2.xsl"));
+        // load xslt
+        final StreamSource xsl = new StreamSource(Transform.class.getClassLoader()
+                .getResourceAsStream(stylesheet));
         xslt = TransformerFactory.newInstance().newTransformer(xsl);
         xslt.setParameter("repositoryURL", repositoryURL);
 

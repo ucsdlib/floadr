@@ -23,7 +23,7 @@ import org.apache.http.impl.conn.PoolingClientConnectionManager;
  * @author escowles
  * @since 2015-01-29
 **/
-public class Pokr {
+public class LoadFiles {
 
     private static String repositoryURL;
     private static HttpClient client;

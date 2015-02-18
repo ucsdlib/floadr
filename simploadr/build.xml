@@ -1,6 +1,5 @@
 <?xml version="1.0"?>
-<project name="dams" default="compile" basedir=".">
-  <property name="appName" value="dams"/>
+<project name="simploadr" default="compile" basedir=".">
   <property file="${user.home}/build.properties"/>
   <property file="${basedir}/build.properties"/>
   <property name="src"       value="${basedir}/src"/>
@@ -45,41 +44,31 @@
     </copy>
   </target>
 
-  <!-- load -->
-  <target name="load" description="Load files">
-    <echo message="load.url: ${load.url}"/>
-    <echo message="load.dir: ${load.dir}"/>
-    <echo message="load.ids: ${load.ids}"/>
-    <echo message="load.mod: ${load.mod}"/>
-    <java classname="edu.ucsd.library.floadr.Simploadr" classpathref="execpath">
-      <arg line="${load.url} ${load.ids} ${load.dir} ${load.mod}"/>
-    </java>
-  </target>
-
-  <!-- transformr -->
-  <target name="transform" description="Transform files">
-    <echo message="x.src: ${x.src}"/>
-    <echo message="x.dst: ${x.dst}"/>
+  <!-- step 1: transform metadata -->
+  <target name="transform" description="Transform metadata">
+    <echo message="x.src..: ${x.src}"/>
+    <echo message="x.dst..: ${x.dst}"/>
     <echo message="x.files: ${x.files}"/>
-    <echo message="x.url: ${x.url}"/>
-    <java classname="edu.ucsd.library.floadr.Transformr" classpathref="execpath">
-      <arg line="${x.src} ${x.dst} ${x.files} ${x.url}"/>
+    <echo message="x.xsl..: ${x.xsl}"/>
+    <echo message="x.url..: ${x.url}"/>
+    <java classname="edu.ucsd.library.floadr.Transform" classpathref="execpath">
+      <arg line="${x.src} ${x.dst} ${x.files} ${x.xsl} ${x.url}"/>
     </java>
   </target>
 
-  <!-- pokr -->
-  <target name="poke" description="Create URLs in Fedora 4">
+  <!-- step 2: load content files -->
+  <target name="files" description="Load content files in Fedora 4">
     <echo message="p.urls: ${p.urls}"/>
     <echo message="p.src.: ${p.src}"/>
-    <java classname="edu.ucsd.library.floadr.Pokr" classpathref="execpath">
+    <java classname="edu.ucsd.library.floadr.LoadFiles" classpathref="execpath">
       <arg line="${p.urls} ${p.src}"/>
     </java>
   </target>
 
-  <!-- pushr -->
-  <target name="push" description="Push files into Fedora 4">
+  <!-- step 3: load metadata files -->
+  <target name="meta" description="Load metadata files into Fedora 4">
     <echo message="p.src: ${p.src}"/>
-    <java classname="edu.ucsd.library.floadr.Pushr" classpathref="execpath">
+    <java classname="edu.ucsd.library.floadr.LoadMetadata" classpathref="execpath">
       <arg line="${p.src}"/>
     </java>
   </target>

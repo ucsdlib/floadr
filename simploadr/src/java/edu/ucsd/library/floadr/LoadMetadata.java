@@ -22,7 +22,7 @@ import org.apache.http.impl.conn.PoolingClientConnectionManager;
  * @author escowles
  * @since 2015-01-28
 **/
-public class Pushr {
+public class LoadMetadata {
 
     private static String repositoryURL;
     private static HttpClient client;
