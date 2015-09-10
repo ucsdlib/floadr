@@ -18,7 +18,7 @@ import org.apache.http.impl.conn.PoolingClientConnectionManager;
 
 
 /**
- * Utility to push RDF/XML files into Fedora 4.
+ * Utility to load RDF/XML files into Fedora 4.
  * @author escowles
  * @since 2015-01-28
 **/
@@ -61,7 +61,7 @@ public class LoadMetadata {
                 long now = System.currentTimeMillis();
                 long dur = now - start;
                 start = now;
-                System.out.println("push: " + (i+1) + ": " + ((float)dur/1000));
+                System.out.println("LoadFiles: " + (i+1) + ": " + ((float)dur/1000));
             }
         }
 

@@ -52,7 +52,7 @@ public class LoadFiles {
         BufferedReader in = new BufferedReader( new FileReader(urlFile) );
         for ( String url = null; (url = in.readLine()) != null; ) {
             records++;
-            int status = poke( url, findFile(url, baseDir) );
+            int status = loadFile( url, findFile(url, baseDir) );
             if ( status != 201 ) {
                 System.out.println(url + ", status: " + status + ", errors: " + errors.size());
             }
@@ -60,7 +60,7 @@ public class LoadFiles {
                 long now = System.currentTimeMillis();
                 long dur = now - start;
                 start = now;
-                System.out.println("poke: " + records + ": " + ((float)dur/1000));
+                System.out.println("LoadFiles: " + records + ": " + ((float)dur/1000));
             }
         }
 
@@ -73,7 +73,7 @@ public class LoadFiles {
         }
     }
 
-    private static int poke( String url, File f ) {
+    private static int loadFile( String url, File f ) {
         int status = 0;
         HttpPut put = null;
         try {
