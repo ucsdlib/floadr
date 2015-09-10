@@ -187,6 +187,7 @@ public class Gloadr {
                 success++;
             } catch ( Exception ex ) {
                 log.warn("Error updating " + objPath + ": " + ex.toString());
+                ex.printStackTrace();
                 if ( doc != null ) { log.warn( doc.asXML() ); }
                 errors++;
                 errorIds.add(id);
