@@ -71,10 +71,10 @@ public class Floadr {
             if ( fn.matches("^20775-" + objid + "-\\d-.*") && !fn.endsWith("rdf.xml") ) {
                 final String fileId = fileId( objid, fn );
                 if ( fileId.indexOf("/") != -1 ) {
-                    final String compPath = "/" + objPath(objid) + fileId.replaceAll("/.*","");
+                    final String compPath = "/" + objPath(objid) + "/" + fileId.replaceAll("/.*","");
                     repo.findOrCreateObject( compPath );
                 }
-                final String dsPath = "/" + objPath(objid) + fileId;
+                final String dsPath = "/" + objPath(objid) + "/" + fileId;
                 if ( repo.exists( dsPath ) ) {
                     log.info("  Skipped: " + fn);
                     skipped++;
@@ -117,7 +117,7 @@ public class Floadr {
         if ( s == null ) { return null; }
         String result = "";
         int i = 0;
-        while( i < (s.length() - 1) )
+        while( i < (s.length() - 1) && i < 10)
         {
             result += s.substring(i,i+2);
             result += "/";
@@ -127,6 +127,6 @@ public class Floadr {
         {
             result += s.substring(i) + "/";
         }
-        return result;
+        return result.substring(0,  result.length() - 1);
     }
 }
