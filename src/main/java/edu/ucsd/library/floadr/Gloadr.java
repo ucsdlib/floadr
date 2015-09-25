@@ -8,12 +8,14 @@ import static org.slf4j.LoggerFactory.getLogger;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -123,6 +125,10 @@ public class Gloadr {
             Document doc = null;
             // transform metadata
             final List<String> files = new ArrayList<>();
+            final List<String> objects = new ArrayList<>();
+            List<Node> objectNodes = new ArrayList<>();
+            List<Node> fileNodes = new ArrayList<Node>();
+
             final String update = null;
             try {
                 dur1 = System.currentTimeMillis();
@@ -134,6 +140,18 @@ public class Gloadr {
 
                 // make sure links work
                 dur1 = System.currentTimeMillis();
+
+                List<Node> components = doc.selectNodes("/rdf:RDF/*[local-name() = 'Object']/pcdm:hasMember/*[local-name() = 'Component']");
+                for ( Node component : components ) {
+                	// create separate top-level objects for components
+                	toTopLevelObject ( repo, id, doc, component, objectNodes ) ;
+                }
+
+                // add the converted url to objects list
+                for ( Node objectNode : objectNodes ) {
+                    objects.add(objectNode.getStringValue());
+                }
+
                 final List links = doc.selectNodes("//*[@rdf:resource]|//*[@rdf:about]");
                 int linked = 0;
                 for ( final Iterator it = links.iterator(); it.hasNext(); ) {
@@ -141,13 +159,27 @@ public class Gloadr {
                     final Element e = (Element)it.next();
                     final Attribute about = e.attribute(0);
                     String linkPath = about.getValue();
+
+                    // new component object id that don't need fix
+                    boolean isNewID = false;
+                    if (linkPath.startsWith(repositoryURL)) {
+                    	for (String object : objects) {
+                    		if (linkPath.indexOf(object) >= 0) {
+                    			isNewID = true;
+                    			break;
+                    		}
+                    	}
+                    }
+
+                    if (!isNewID) {
                     if ( linkPath.startsWith(repositoryURL) && !linkPath.endsWith("/fcr:content")) {
                         linkPath = fixLink(linkPath, repositoryURL);
                         about.setValue(repositoryURL + linkPath);
 
                         if ( e.getName().endsWith("File") ) {
                             log.debug("Added File: " + repositoryURL + linkPath);
-                            files.add( repositoryURL + linkPath );
+                            fileNodes.add(about);
+                            //files.add( repositoryURL + linkPath );
                         }
 
                     } else if ( linkPath.startsWith(repositoryURL)
@@ -161,6 +193,13 @@ public class Gloadr {
                     } else {
                         log.info("skipping: " + linkPath );
                     }
+                    }else{
+                    	// add file to file list
+                        if ( e.getName().endsWith("File") ) {
+                            log.debug("Added File: " + about.getStringValue());
+                            fileNodes.add(about);
+                        }
+                    }
 
                     if ( linkPath.indexOf("#N") > 0 ) {
                         final Node node = about.getParent();
@@ -168,12 +207,24 @@ public class Gloadr {
                         ((Element)node).addAttribute("rdf:nodeID", about.getStringValue());
                     }
                 }
+
+                // add the main object to the objects list
+                Node objectNode = doc.selectSingleNode("/rdf:RDF/*[local-name() = 'Object']/@rdf:about");
+                objectNodes.add(objectNode);
+                objects.add(objectNode.getStringValue());
+
+                for (Node fileNode : fileNodes) {
+                	files.add(fileNode.getStringValue());
+                }
+
                 dur2 = System.currentTimeMillis();
                 linkDur += (dur2 - dur1);
 
                 // make sure object and rights nodes exist
                 dur1 = System.currentTimeMillis();
-                if ( !repo.exists(objPath + "rights") ) {
+
+                if ( !repo.exists(objPath) ) {
+                	repo.createObject(objPath);
                     log.debug(record + ": creating " + objPath + "rights");
                     repo.createObject(objPath + "rights");
                 }
@@ -195,7 +246,7 @@ public class Gloadr {
 
                 final Map<String, DAMSNode> damsNodes = new TreeMap<>();
 
-                DAMSNode objNode = null;
+                DAMSNode[] objNodes = new DAMSNode[objectNodes.size()];
                 final ResIterator rit = m.listSubjects();
 
                 while(rit.hasNext()) {
@@ -208,8 +259,11 @@ public class Gloadr {
                         if (rdfNode == null) {
                             rdfNode = new DAMSNode ( sid, new ArrayList<DAMSNode>(), sm );
                             damsNodes.put( sid, rdfNode );
-                            if ( sid.endsWith(objPath) ) {
-                                objNode = rdfNode;
+
+                            // identify top level object nodes for ingest
+                            int oidx = objects.indexOf(sid);
+                            if ( oidx >= 0 ) {
+                                objNodes[oidx] = rdfNode;
                             }
                         }
                     }
@@ -250,7 +304,16 @@ public class Gloadr {
                 }
 
                 // ingest the nodes in order basing on dependency
-                do {
+                for (DAMSNode objNode : Arrays.asList(objNodes)) {
+                	final String oPath = objNode.getNodeID().replace(repositoryURL, "");
+                	if ( !repo.exists(oPath) )
+                			repo.createObject(oPath);
+                    if ( !repo.exists(oPath + "rights") ) {
+                        log.debug(record + ": creating " + oPath + "rights");
+                        repo.createObject(oPath + "rights");
+                    }
+
+                    do {
                     final List<DAMSNode> res = new ArrayList<>();
                     visitNode( objNode, res );
                     if ( res.size() > 0 ) {
@@ -261,12 +324,17 @@ public class Gloadr {
                             final String path = sid.replace(repositoryURL, "");
 
                             log.info( "Ingesting subject " + path );
-                            if ( !repo.exists(path) || path.equals(objPath) || subjectsMissing.indexOf( vNode.getNodeID() ) >= 0 ) {
+                            if ( !repo.exists(path) || objects.indexOf(sid) >= 0 || subjectsMissing.indexOf( vNode.getNodeID() ) >= 0 ) {
 
                                 // create the filestream
                                 if ( files.indexOf( sid ) >= 0 ) {
-                                    log.debug( sid + ": datastream " + path );
-                                    repo.createDatastream( path, new FedoraContent().setContent(new ByteArrayInputStream(new byte[]{})) );
+                                    log.info( sid + ": datastream " + path );
+                                    for (String object : objects) {
+                                    	if (sid.indexOf(object) >= 0) {
+                                    		
+                                    	}
+                                    }
+                                    ingestFile(repo, objPath, sid.replace(repositoryURL, ""), sourceDir.getAbsolutePath());
                                 }
 
                                 // create the subject and make it indexable
@@ -294,7 +362,8 @@ public class Gloadr {
                             vNode.setVisited(true);
                         }
                     }
-                } while ( !objNode.isVisited() );
+                    } while ( !objNode.isVisited() );
+                }
 
                 dur2 = System.currentTimeMillis();
                 metaDur += (dur2 - dur1);
@@ -350,6 +419,40 @@ public class Gloadr {
             }
         }
         result.add(damsNode);
+    }
+
+    private static void toTopLevelObject (FedoraRepository repo, String ark, Document doc, Node component, List<Node> objectNodes) throws FedoraException {
+    	// handling component as top level object
+        Node subjectNode = component.selectSingleNode("@rdf:about");
+        objectNodes.add(0, subjectNode);
+
+        // replace the component ID with new ID
+    	String nid = repo.createResource("").getPath();
+        String cid = subjectNode.getStringValue();
+        subjectNode.setText(cid.replace("/" + ark, nid));
+        List<Node> nodes = component.selectNodes("*/*[@rdf:about]");
+        for (Node node : nodes) {
+        	Node resNode = node.selectSingleNode("@rdf:about");
+        	resNode.setText(resNode.getStringValue().replace("/" + ark, nid));
+        }
+        log.debug("Component " + cid + " => " + nid + " <=> " + subjectNode.getStringValue());
+
+        // rename component to object
+    	String path = component.getPath();
+    	String elemName = path.substring(path.lastIndexOf("/") + 1);
+    	component.setName(elemName.replace("Component", "Object"));
+    	Node parent = component.getParent();
+    	component.detach();
+    	parent.detach();
+
+    	// added as top level object
+    	doc.getRootElement().add(component);
+
+    	// loop through child components to make them to level objects as well
+    	List<Node> components = component.selectNodes("pcdm:hasMember/*[local-name() = 'Component']");
+    	for ( Node comp : components ) {
+    		toTopLevelObject (repo, ark, doc, comp, objectNodes);
+        	}
     }
 
     private static void makeIndexable( final FedoraObject obj ) throws FedoraException {
@@ -412,6 +515,53 @@ public class Gloadr {
 
     }
 
+    private static void ingestFile(FedoraRepository repo, String objPath, String dsPath, String sourceDir) throws FedoraException {
+    	final String[] paths = dsPath.split("/");
+    	String mappedFilePath = objPath;
+    	for (int i=6; i < paths.length; i++) {
+    		mappedFilePath += "/" + paths[i];
+    	}
+    	final String fileName = getFileNameFromPath(mappedFilePath);
+    	int idx = fileName.indexOf("-");
+        final File objDir = new File( sourceDir, Floadr.pairPath(fileName.substring(idx + 1, idx + 11)) );
+        final File srcFile = new File (objDir, fileName);
+    	log.info("Ingesting file " + dsPath + " for object " + objPath + ": " + srcFile.getAbsolutePath());
+
+    	if ( srcFile.exists() ) {
+    		// ingest the file
+            loadFile( repo, dsPath, srcFile );
+        }
+    }
+
+    private static void loadFile( FedoraRepository repo, String dsPath, File dsFile ) {
+        try {
+            if ( repo.exists( dsPath ) ) {
+                log.info("  Skipped: " + dsFile.getPath());
+            } else {
+                final InputStream in = new FileInputStream(dsFile);
+                final String mimeType = Floadr.mimeTypes.getContentType(dsFile);
+                final FedoraContent content = new FedoraContent().setContent(in)
+                        .setFilename(dsFile.getName()).setContentType(mimeType);
+                final FedoraDatastream ds = repo.createDatastream( dsPath, content );
+                log.info("  Datastream: " + ds.getPath());
+            }
+        } catch ( Exception ex ) {
+            log.warn("Error: " + ex.toString());
+        }
+    }
+
+    private static String getFileNameFromPath(String path) {
+    	String[] paths = path.split("/");
+    	String fileID = "";
+    	for (int i = 0; i < paths.length; i++ ) {
+    		if (i <= 5)
+    			fileID += StringUtils.isNotBlank(paths[i]) ? paths[i] : "";
+    		else
+    			fileID += "-" + paths[i];
+    	}
+    	return "20775-" + fileID ;
+    }
+    
     /**
      * Create a request to update triples.
      * @param path The datastream path.
