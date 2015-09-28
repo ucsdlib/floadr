@@ -79,12 +79,16 @@
     <xsl:variable name="id" select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
     <pcdm:Collection rdf:about="{$id}">
       <dcterms:type rdf:resource="http://purl.org/dc/dcmitype/Collection"/>
+      <!-- This backward linking may cause the ingest failed since the objects not be ingested yet
       <xsl:for-each select="../../@rdf:about">
         <pcdm:hasMember rdf:resource="{.}"/>
       </xsl:for-each>
+       -->
+      <!-- This backward linking may cause the ingest failed for infinity looping
       <xsl:for-each select="dams:hasAssembledCollection/dams:AssembledCollection/@rdf:about|dams:hasProvenanceCollection/dams:ProvenanceCollection/@rdf:about|dams:hasPart/dams:ProvenanceCollectionPart/@rdf:about|dams:hasAssembledCollection/@rdf:resource|dams:hasProvenanceCollection/@rdf:resource|dams:hasPart/@rdf:resource">
         <pcdm:hasMember rdf:resource="{.}"/>
       </xsl:for-each>
+      -->
       <xsl:apply-templates/>
     </pcdm:Collection>
   </xsl:template>
@@ -100,9 +104,11 @@
       <dcterms:title><xsl:value-of select="dams:unitName"/></dcterms:title>
       <dcterms:description><xsl:value-of select="dams:unitDescription"/></dcterms:description>
       <dcterms:relation rdf:resource="{dams:unitURI}"/>
+      <!-- 
       <xsl:for-each select="//dams:unit">
         <ldp:contains rdf:resource="{../@rdf:about}"/>
       </xsl:for-each>
+       -->
     </pcdm:AdministrativeSet>
   </xsl:template>
 
@@ -489,7 +495,9 @@
         </xsl:when>
         <xsl:otherwise>
           <!-- TODO directly attach thumbnail, or link to URL? -->
+          <!-- It may cause the ingest failed since the collection image may not exist
           <dams42:thumbnail rdf:resource="{dams:uri/@rdf:resource|dams:uri/text()}"/>
+           -->
         </xsl:otherwise>
       </xsl:choose>
     </xsl:for-each>
@@ -901,6 +909,9 @@ TODO Unmapped values:
       </xsl:when>
       <xsl:when test="@rdf:about != ''">
         <xsl:value-of select="concat($repositoryURL, substring-after(@rdf:about, $oldns))"/>
+      </xsl:when>
+      <xsl:when test="local-name() = 'Date'">
+        <xsl:value-of select="concat($repositoryURL, substring-after(../../@rdf:about, $oldns))"/>#<xsl:value-of select="generate-id()"/>
       </xsl:when>
       <xsl:otherwise><xsl:value-of select="$record_id"/>#<xsl:value-of select="generate-id()"/></xsl:otherwise>
     </xsl:choose>
