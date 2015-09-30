@@ -29,7 +29,7 @@ import org.slf4j.Logger;
 public class Floadr {
 
     private static Logger log = getLogger(Floadr.class);
-    private static MimetypesFileTypeMap mimeTypes = new MimetypesFileTypeMap();
+    public static MimetypesFileTypeMap mimeTypes = new MimetypesFileTypeMap();
     private static int errors = 0;
     private static int created = 0;
     private static int skipped = 0;
@@ -65,7 +65,7 @@ public class Floadr {
         log.info("created: " + created + ", skipped: " + skipped + ", errors: " + errors);
     }
 
-    private static void loadFile( FedoraRepository repo, String objid, File dsFile ) {
+    public static void loadFile( FedoraRepository repo, String objid, File dsFile ) {
         try {
             final String fn = dsFile.getName();
             if ( fn.matches("^20775-" + objid + "-\\d-.*") && !fn.endsWith("rdf.xml") ) {
@@ -97,7 +97,7 @@ public class Floadr {
     /**
      * Convert a filename to a file id.
     **/
-    private static String fileId( final String objid, final String filename ) {
+    public static String fileId( final String objid, final String filename ) {
         String[] parts = filename.split("-",4);
         if ( parts[2].equals("0") ) {
             return parts[3];
