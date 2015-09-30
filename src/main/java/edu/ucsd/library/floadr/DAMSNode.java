@@ -12,11 +12,17 @@ import com.hp.hpl.jena.rdf.model.Model;
  */
 public class DAMSNode {
 	protected String nodeID = null;
+	protected String alternativeID = null;
 	protected List<DAMSNode> childen = new ArrayList<>();
 	protected boolean visited = false;
 	protected Model model = null;
 	public DAMSNode (final String nodeID) {
 		this(nodeID, new ArrayList<DAMSNode>());
+	}
+
+	public DAMSNode (final String nodeID, final String alternativeID) {
+		this(nodeID, new ArrayList<DAMSNode>());
+		this.alternativeID = alternativeID;
 	}
 
 	public DAMSNode (final String nodeID, final List<DAMSNode> childen) {
@@ -39,6 +45,14 @@ public class DAMSNode {
 
 	public void setNodeID(final String nodeID) {
 		this.nodeID = nodeID;
+	}
+
+	public String getAlternativeID() {
+		return alternativeID;
+	}
+
+	public void setAlternativeID(String alternativeID) {
+		this.alternativeID = alternativeID;
 	}
 
 	public List<DAMSNode> getChilden() {

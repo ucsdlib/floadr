@@ -51,6 +51,7 @@ import org.fcrepo.client.FedoraDatastream;
 import org.fcrepo.client.FedoraException;
 import org.fcrepo.client.FedoraObject;
 import org.fcrepo.client.FedoraRepository;
+import org.fcrepo.client.FedoraResource;
 import org.fcrepo.client.ReadOnlyException;
 import org.fcrepo.client.impl.FedoraRepositoryImpl;
 import org.slf4j.Logger;
@@ -119,6 +120,7 @@ public class Gloadr {
             record++;
             log.info(record + ": loading: " + id);
             final String objPath = "/" + Floadr.objPath(id);
+            final String objURL = repositoryURL + objPath;
             final File metaFile = new File( sourceDir + "/" + pairPath(id) + "/"
                     + "20775-" + id + "-0-rdf.xml" );
 
@@ -126,7 +128,7 @@ public class Gloadr {
             // transform metadata
             final List<String> files = new ArrayList<>();
             final List<String> objects = new ArrayList<>();
-            List<Node> objectNodes = new ArrayList<>();
+            final Map<String, DAMSNode> damsNodes = new TreeMap<>();
             List<Node> fileNodes = new ArrayList<Node>();
 
             final String update = null;
@@ -141,17 +143,6 @@ public class Gloadr {
                 // make sure links work
                 dur1 = System.currentTimeMillis();
 
-                List<Node> components = doc.selectNodes("/rdf:RDF/*[local-name() = 'Object']/pcdm:hasMember/*[local-name() = 'Component']");
-                for ( Node component : components ) {
-                	// create separate top-level objects for components
-                	toTopLevelObject ( repo, id, doc, component, objectNodes ) ;
-                }
-
-                // add the converted url to objects list
-                for ( Node objectNode : objectNodes ) {
-                    objects.add(objectNode.getStringValue());
-                }
-
                 final List links = doc.selectNodes("//*[@rdf:resource]|//*[@rdf:about]");
                 int linked = 0;
                 for ( final Iterator it = links.iterator(); it.hasNext(); ) {
@@ -160,18 +151,6 @@ public class Gloadr {
                     final Attribute about = e.attribute(0);
                     String linkPath = about.getValue();
 
-                    // new component object id that don't need fix
-                    boolean isNewID = false;
-                    if (linkPath.startsWith(repositoryURL)) {
-                    	for (String object : objects) {
-                    		if (linkPath.indexOf(object) >= 0) {
-                    			isNewID = true;
-                    			break;
-                    		}
-                    	}
-                    }
-
-                    if (!isNewID) {
                     if ( linkPath.startsWith(repositoryURL) && !linkPath.endsWith("/fcr:content")) {
                         linkPath = fixLink(linkPath, repositoryURL);
                         about.setValue(repositoryURL + linkPath);
@@ -193,13 +172,6 @@ public class Gloadr {
                     } else {
                         log.info("skipping: " + linkPath );
                     }
-                    }else{
-                    	// add file to file list
-                        if ( e.getName().endsWith("File") ) {
-                            log.debug("Added File: " + about.getStringValue());
-                            fileNodes.add(about);
-                        }
-                    }
 
                     if ( linkPath.indexOf("#N") > 0 ) {
                         final Node node = about.getParent();
@@ -208,10 +180,22 @@ public class Gloadr {
                     }
                 }
 
+                // separate components as top level objects and retain the component structure
+                DAMSNode topDAMSNode = new DAMSNode(objURL, objURL);
+                damsNodes.put(objURL, topDAMSNode);
+
+                List<Node> components = doc.selectNodes("/rdf:RDF/*[local-name() = 'Object']/pcdm:hasMember/*[local-name() = 'Component']");
+                for ( Node component : components ) {
+            		String compID = component.selectSingleNode("@rdf:about").getStringValue();
+            		DAMSNode compNode = new DAMSNode(compID, compID);
+            		topDAMSNode.addChild(compNode);
+
+            		// create separate top-level objects for components
+                	toTopLevelObject ( repo, doc, component, objects, compNode, damsNodes );
+                }
+
                 // add the main object to the objects list
-                Node objectNode = doc.selectSingleNode("/rdf:RDF/*[local-name() = 'Object']/@rdf:about");
-                objectNodes.add(objectNode);
-                objects.add(objectNode.getStringValue());
+                objects.add(objURL);
 
                 for (Node fileNode : fileNodes) {
                 	files.add(fileNode.getStringValue());
@@ -244,9 +228,7 @@ public class Gloadr {
                 final StringWriter sw = new StringWriter();
                 m.write(sw);
 
-                final Map<String, DAMSNode> damsNodes = new TreeMap<>();
-
-                DAMSNode[] objNodes = new DAMSNode[objectNodes.size()];
+                DAMSNode[] objNodes = new DAMSNode[objects.size()];
                 final ResIterator rit = m.listSubjects();
 
                 while(rit.hasNext()) {
@@ -259,12 +241,16 @@ public class Gloadr {
                         if (rdfNode == null) {
                             rdfNode = new DAMSNode ( sid, new ArrayList<DAMSNode>(), sm );
                             damsNodes.put( sid, rdfNode );
+                        } else {
+                        	Model rdf = rdfNode.getModel();
+                        	if (rdf == null || rdf.size() == 0)
+                        		rdfNode.setModel(sm);
+                        }
 
-                            // identify top level object nodes for ingest
-                            int oidx = objects.indexOf(sid);
-                            if ( oidx >= 0 ) {
-                                objNodes[oidx] = rdfNode;
-                            }
+                        // identify top level object nodes for ingest
+                        int oidx = objects.indexOf(sid);
+                        if ( oidx >= 0 ) {
+                            objNodes[oidx] = rdfNode;
                         }
                     }
                 }
@@ -323,7 +309,7 @@ public class Gloadr {
                             final String sid = vNode.nodeID;
                             final String path = sid.replace(repositoryURL, "");
 
-                            log.info( "Ingesting subject " + path );
+                            log.info( "Ingesting subject " + path + " in object " + objNode.getAlternativeID());
                             if ( !repo.exists(path) || objects.indexOf(sid) >= 0 || subjectsMissing.indexOf( vNode.getNodeID() ) >= 0 ) {
 
                                 // create the filestream
@@ -334,7 +320,7 @@ public class Gloadr {
                                     		
                                     	}
                                     }
-                                    ingestFile(repo, objPath, sid.replace(repositoryURL, ""), sourceDir.getAbsolutePath());
+                                    ingestFile(repo, objNode.getAlternativeID().replace(repositoryURL, ""), sid.replace(repositoryURL, ""), sourceDir.getAbsolutePath());
                                 }
 
                                 // create the subject and make it indexable
@@ -342,7 +328,7 @@ public class Gloadr {
                                     makeIndexable( repo.findOrCreateObject(path) );
                                 }
                                 // update subject properties
-                                updateSubject(httpClient, vNode.model, repositoryURL, path);
+                                updateSubject( httpClient, vNode.model, repositoryURL, path, "application/rdf+xml" );
 
                                 // handling federates files linking
                                 if ( StringUtils.isNoneBlank( federatedURL ) && (sid.endsWith("/fcr:content") || (files.indexOf( sid ) >= 0 && !damsNodes.containsKey(sid + "/fcr:content"))) ) {
@@ -365,6 +351,11 @@ public class Gloadr {
                     } while ( !objNode.isVisited() );
                 }
 
+                // link components to object with ore:Proxy
+                if (objects.size() > 1) {
+                    linkComponentsToObject( httpClient, repo, topDAMSNode, Arrays.asList(objNodes) );
+                }
+
                 dur2 = System.currentTimeMillis();
                 metaDur += (dur2 - dur1);
                 success++;
@@ -373,7 +364,8 @@ public class Gloadr {
                 ex.printStackTrace();
                 if ( doc != null ) { log.warn( doc.asXML() ); }
                 errors++;
-                errorIds.add(id);
+                if( !errorIds.contains(id) )
+                    errorIds.add(id);
             }
         }
 
@@ -421,21 +413,27 @@ public class Gloadr {
         result.add(damsNode);
     }
 
-    private static void toTopLevelObject (FedoraRepository repo, String ark, Document doc, Node component, List<Node> objectNodes) throws FedoraException {
+    private static void toTopLevelObject (FedoraRepository repo, Document doc, Node component, 
+    		List<String> objects, DAMSNode parentDAMSNode, Map<String, DAMSNode> damsNodes) throws FedoraException {
     	// handling component as top level object
         Node subjectNode = component.selectSingleNode("@rdf:about");
-        objectNodes.add(0, subjectNode);
 
         // replace the component ID with new ID
-    	String nid = repo.createResource("").getPath();
+    	String nPath = repo.createResource("").getPath();
+    	String nid = repo.getRepositoryUrl() + nPath;
         String cid = subjectNode.getStringValue();
-        subjectNode.setText(cid.replace("/" + ark, nid));
+        subjectNode.setText(nid);
         List<Node> nodes = component.selectNodes("*/*[@rdf:about]");
         for (Node node : nodes) {
         	Node resNode = node.selectSingleNode("@rdf:about");
-        	resNode.setText(resNode.getStringValue().replace("/" + ark, nid));
+        	resNode.setText(resNode.getStringValue().replace(cid, nid));
         }
         log.debug("Component " + cid + " => " + nid + " <=> " + subjectNode.getStringValue());
+
+        parentDAMSNode.setNodeID(nid);
+        // add each component object to the object ordered list and objects map
+        objects.add(0, nid);
+        damsNodes.put(nid, parentDAMSNode);
 
         // rename component to object
     	String path = component.getPath();
@@ -451,12 +449,56 @@ public class Gloadr {
     	// loop through child components to make them to level objects as well
     	List<Node> components = component.selectNodes("pcdm:hasMember/*[local-name() = 'Component']");
     	for ( Node comp : components ) {
-    		toTopLevelObject (repo, ark, doc, comp, objectNodes);
-        	}
+    		String compID = comp.selectSingleNode("@rdf:about").getStringValue();
+    		DAMSNode childNode = new DAMSNode(compID, compID);
+    		parentDAMSNode.addChild(childNode);
+    		toTopLevelObject (repo, doc, comp, objects, childNode, damsNodes);
+        }
+    }
+
+    private static void linkComponentsToObject(HttpClient httpClient, FedoraRepository repo, DAMSNode parent, List<DAMSNode> objects) throws Exception {
+    	List<DAMSNode> components = new ArrayList<>();
+    	for (DAMSNode comp : parent.getChilden()) {
+    		if (objects.indexOf(comp) >= 0)
+    			components.add(comp);
+    	}
+	    if (components.size() > 0) {
+	    	for (DAMSNode component : components) {
+	    		// create members container
+	    		String membersPath = parent.getNodeID().replace(repo.getRepositoryUrl(), "") + "/members";
+	    		createMembers( httpClient, repo, membersPath );
+	    		// create ore:Proxy
+	    		createProxy( httpClient, repo, membersPath, parent, component );
+	    	}
+    	}
     }
 
     private static void makeIndexable( final FedoraObject obj ) throws FedoraException {
         obj.updateProperties("insert { <> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://fedora.info/definitions/v4/indexing#indexable> } where {}");
+    }
+
+    private static void createMembers( final HttpClient httpClient, final FedoraRepository repo, final String membersPath ) throws Exception {
+        int idx = repo.getRepositoryUrl().indexOf("/", 9);
+        String root = repo.getRepositoryUrl().substring(idx);
+        String rdfTurtle = "@prefix ldp: <http://www.w3.org/ns/ldp#>"
+        		+ " @prefix pcdm: <http://pcdm.org/models#>"
+        		+ " @prefix ore: <http://www.openarchives.org/ore/terms/> "
+        		+ " <> a ldp:IndirectContainer ;"
+        		+ " ldp:membershipResource <" + root+ membersPath.substring(0, membersPath.lastIndexOf("/")) + "> ;"
+        		+ " ldp:hasMemberRelation pcdm:hasMember ;"
+        		+ " ldp:insertedContentRelation ore:proxyFor .";
+        updateSubject( httpClient, rdfTurtle, repo.getRepositoryUrl(), membersPath, "text/turtle");
+    }
+
+    private static void createProxy( final HttpClient httpClient, final FedoraRepository repo, String membersPath, DAMSNode parent, DAMSNode component ) throws Exception {
+        int idx = repo.getRepositoryUrl().indexOf("/", 9);
+        String root = repo.getRepositoryUrl().substring(idx);
+        String cid = component.getNodeID();
+        String proxyPath = membersPath + cid.substring(cid.lastIndexOf("/"));
+        String rdfTurtle = "@prefix ore: <http://www.openarchives.org/ore/terms/> "
+        		+ " <> ore:proxyFor <" + root + component.getNodeID().replace(repo.getRepositoryUrl(), "") + "> ;"
+        		+ " ore:proxyIn <" + root + parent.getNodeID().replace(repo.getRepositoryUrl(), "") + "> .";
+    	updateSubject( httpClient, rdfTurtle, repo.getRepositoryUrl(), proxyPath, "text/turtle");
     }
 
 	private static String fixLink( final String path, final String repositoryURL ) {
@@ -481,19 +523,29 @@ public class Gloadr {
         final com.hp.hpl.jena.query.Query query = QueryFactory.create("DESCRIBE <" + sid + ">");
         return QueryExecutionFactory.create(query, model).execDescribe();
     }
-    private static void updateSubject(final HttpClient httpClient, final Model m, final String repositoryURL, final String path) throws Exception {
+    private static void updateSubject(final HttpClient httpClient, final Model m, final String repositoryURL, final String path, String format) throws Exception {
+    	final StringWriter sw = new StringWriter();
+    	try {
+            m.write(sw);
+            updateSubject( httpClient, sw.toString(), repositoryURL, path, format);
+        } catch (final Exception e) {
+            throw e;
+        } finally {
+            if ( sw != null ) {
+                sw.close();;
+            }
+        }
+
+    }
+    private static void updateSubject(final HttpClient httpClient, final String content, final String repositoryURL, final String path, String format) throws Exception {
         HttpPut put = null;
-        String update = null;
+        String update = content;
         final Map<String, String> headers = new HashMap<>();
         headers.put("Prefer", "handling=lenient; received=minimal");
         try {
-
-            final StringWriter sw = new StringWriter();
-            m.write(sw);
-            update = sw.toString();
             log.debug(update);
             put = createTriplesPutMethod(repositoryURL, path, new ByteArrayInputStream(update.getBytes("utf-8")),
-                    "application/rdf+xml", headers);
+                    format, headers);
             final HttpResponse response= httpClient.execute(put);
             final int status = response.getStatusLine().getStatusCode();
 
