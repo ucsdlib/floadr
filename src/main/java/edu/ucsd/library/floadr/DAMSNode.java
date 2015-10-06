@@ -11,8 +11,13 @@ import com.hp.hpl.jena.rdf.model.Model;
  * @date Since September 23, 2015
  */
 public class DAMSNode {
+	public static String NODETYPE_OBJECT = "Object";
+	public static String NODETYPE_COMPONENT = "Component";
+	public static String NODETYPE_FILE = "File";
+
 	protected String nodeID = null;
 	protected String alternativeID = null;
+	protected String nodeType = NODETYPE_OBJECT;
 	protected List<DAMSNode> childen = new ArrayList<>();
 	protected boolean visited = false;
 	protected Model model = null;
@@ -53,6 +58,14 @@ public class DAMSNode {
 
 	public void setAlternativeID(String alternativeID) {
 		this.alternativeID = alternativeID;
+	}
+
+	public String getNodeType() {
+		return nodeType;
+	}
+
+	public void setNodeType(String nodeType) {
+		this.nodeType = nodeType;
 	}
 
 	public List<DAMSNode> getChilden() {
