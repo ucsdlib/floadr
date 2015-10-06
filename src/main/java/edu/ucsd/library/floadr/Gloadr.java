@@ -75,6 +75,7 @@ public class Gloadr {
 
     private static Logger log = getLogger(Gloadr.class);
     private static List<String> subjectsMissing = new ArrayList<>();
+    private static String ldpDirectContainerFilePath = "/files";
 
     /**
      * Command-line operation.
@@ -114,10 +115,12 @@ public class Gloadr {
         int success = 0;
         int errors  = 0;
         int record = 0;
+        boolean ingestFailed = false;
         final List<String> errorIds = new ArrayList<>();
         final BufferedReader objectIdReader = new BufferedReader( new FileReader(objectIds) );
         for ( String id = null; (id = objectIdReader.readLine()) != null; ) {
             record++;
+            ingestFailed = false;
             log.info(record + ": loading: " + id);
             final String objPath = "/" + Floadr.objPath(id);
             final String objURL = repositoryURL + objPath;
@@ -155,7 +158,7 @@ public class Gloadr {
                         linkPath = fixLink(linkPath, repositoryURL);
                         about.setValue(repositoryURL + linkPath);
 
-                        if ( e.getName().endsWith("File") ) {
+                        if ( e.getName().endsWith( DAMSNode.NODETYPE_FILE ) ) {
                             log.debug("Added File: " + repositoryURL + linkPath);
                             fileNodes.add(about);
                             //files.add( repositoryURL + linkPath );
@@ -188,10 +191,17 @@ public class Gloadr {
                 for ( Node component : components ) {
             		String compID = component.selectSingleNode("@rdf:about").getStringValue();
             		DAMSNode compNode = new DAMSNode(compID, compID);
+            		compNode.setNodeType(DAMSNode.NODETYPE_COMPONENT);
             		topDAMSNode.addChild(compNode);
 
             		// create separate top-level objects for components
                 	toTopLevelObject ( repo, doc, component, objects, compNode, damsNodes );
+                }
+
+                // use LDP DirectContainer to contain object files
+                List<Node> oNodes = doc.selectNodes("/rdf:RDF/*");
+                for (Node oNode : oNodes) {
+                	applyLdpDirectContainerForFiles( oNode );
                 }
 
                 // add the main object to the objects list
@@ -240,6 +250,9 @@ public class Gloadr {
                         DAMSNode rdfNode = damsNodes.get( sid );
                         if (rdfNode == null) {
                             rdfNode = new DAMSNode ( sid, new ArrayList<DAMSNode>(), sm );
+                            if ( files.indexOf( sid ) >= 0 )
+                            	rdfNode.setNodeType(DAMSNode.NODETYPE_FILE);
+
                             damsNodes.put( sid, rdfNode );
                         } else {
                         	Model rdf = rdfNode.getModel();
@@ -312,19 +325,16 @@ public class Gloadr {
                             log.info( "Ingesting subject " + path + " in object " + objNode.getAlternativeID());
                             if ( !repo.exists(path) || objects.indexOf(sid) >= 0 || subjectsMissing.indexOf( vNode.getNodeID() ) >= 0 ) {
 
+                            	try {
                                 // create the filestream
-                                if ( files.indexOf( sid ) >= 0 ) {
+                                if ( vNode.getNodeType().equals(DAMSNode.NODETYPE_FILE) ) {
                                     log.info( sid + ": datastream " + path );
-                                    for (String object : objects) {
-                                    	if (sid.indexOf(object) >= 0) {
-                                    		
-                                    	}
-                                    }
-                                    ingestFile(repo, objNode.getAlternativeID().replace(repositoryURL, ""), sid.replace(repositoryURL, ""), sourceDir.getAbsolutePath());
+
+                                    ingestFile(httpClient, repo, objNode.getAlternativeID().replace(repositoryURL, ""), sid.replace(repositoryURL, ""), sourceDir.getAbsolutePath());
                                 }
 
                                 // create the subject and make it indexable
-                                if ( files.indexOf( sid ) < 0 && !sid.endsWith("/fcr:content") ) {
+                                if ( !vNode.getNodeType().equals(DAMSNode.NODETYPE_FILE) && !sid.endsWith("/fcr:content") ) {
                                     makeIndexable( repo.findOrCreateObject(path) );
                                 }
                                 // update subject properties
@@ -339,7 +349,15 @@ public class Gloadr {
                                     final FedoraDatastream ds = repo.findOrCreateDatastream( dsPath );
                                     ds.updateProperties( sparql );;
                                 }
+                            	} catch (Exception e) {
+                            		log.warn("Ingest object " + objPath + " faild in " + sid, e);
 
+                            		ingestFailed = true;
+                                    errors++;
+                            		if( !errorIds.contains(id) )
+                                        errorIds.add(id);
+                            	}
+                                
                                 final int nidx = subjectsMissing.indexOf( vNode.getNodeID() );
                                 if ( nidx >= 0 ) {
                                     subjectsMissing.remove( nidx );
@@ -361,11 +379,16 @@ public class Gloadr {
                 success++;
             } catch ( final Exception ex ) {
                 log.warn("Error updating " + objPath + ": " + ex.toString() );
+                ingestFailed = true;
                 ex.printStackTrace();
-                if ( doc != null ) { log.warn( doc.asXML() ); }
+                if ( doc != null ) { log.debug( doc.asXML() ); }
                 errors++;
                 if( !errorIds.contains(id) )
                     errorIds.add(id);
+            }
+
+            if ( ingestFailed && doc != null ) {
+            	log.warn( doc.asXML() ); 
             }
         }
 
@@ -451,9 +474,20 @@ public class Gloadr {
     	for ( Node comp : components ) {
     		String compID = comp.selectSingleNode("@rdf:about").getStringValue();
     		DAMSNode childNode = new DAMSNode(compID, compID);
+    		childNode.setNodeType(DAMSNode.NODETYPE_COMPONENT);
     		parentDAMSNode.addChild(childNode);
     		toTopLevelObject (repo, doc, comp, objects, childNode, damsNodes);
         }
+    }
+
+    private static void applyLdpDirectContainerForFiles (Node topNode) {
+    	String oid = topNode.selectSingleNode("@rdf:about").getStringValue();
+        List<Node> nodes = topNode.selectNodes("*[contains(local-name(), '" + DAMSNode.NODETYPE_FILE + "')]/*");
+        for (Node node : nodes) {
+    		Node resNode = node.selectSingleNode("@rdf:about");
+    		resNode.setText(resNode.getStringValue().replace(oid, oid + ldpDirectContainerFilePath));
+    		log.debug("Converted file " + resNode.getStringValue() + " to use LDP Direct Container: " + oid + ldpDirectContainerFilePath);
+    	}
     }
 
     private static void linkComponentsToObject(HttpClient httpClient, FedoraRepository repo, DAMSNode parent, List<DAMSNode> objects) throws Exception {
@@ -567,10 +601,16 @@ public class Gloadr {
 
     }
 
-    private static void ingestFile(FedoraRepository repo, String objPath, String dsPath, String sourceDir) throws FedoraException {
-    	final String[] paths = dsPath.split("/");
+    private static void ingestFile(HttpClient httpClient, FedoraRepository repo, String objPath, String dsPath, String sourceDir)
+    		throws Exception {
+    	final String[] paths = dsPath.substring(dsPath.lastIndexOf(ldpDirectContainerFilePath) + ldpDirectContainerFilePath.length()).split("/");
     	String mappedFilePath = objPath;
-    	for (int i=6; i < paths.length; i++) {
+    	if (dsPath.startsWith(objPath)) {
+    		// simple objects that keep its original ark with cid 0
+    		mappedFilePath += "/0";
+    	}
+    		
+    	for (int i=1; i < paths.length; i++) {
     		mappedFilePath += "/" + paths[i];
     	}
     	final String fileName = getFileNameFromPath(mappedFilePath);
@@ -580,9 +620,40 @@ public class Gloadr {
     	log.info("Ingesting file " + dsPath + " for object " + objPath + ": " + srcFile.getAbsolutePath());
 
     	if ( srcFile.exists() ) {
+    		// create LDP direct container to contain files
+    		int cidx = dsPath.lastIndexOf(ldpDirectContainerFilePath);
+    		if (cidx < 0)
+    			log.error("Need to use LDP DirectContainer to contain file: " + dsPath);
+
+    		String containerPath = dsPath.substring(0, cidx + ldpDirectContainerFilePath.length());
+    		findOrCreateDirectContainer( httpClient, repo, containerPath );
+
     		// ingest the file
             loadFile( repo, dsPath, srcFile );
-        }
+
+            log.debug("Ingested file:" + dsPath);
+            // update the RDF metadata of the ldp:NonRdfSource to specify that the resource is a pcdm:File
+            String sparqlUpdate = "PREFIX pcdm: <http://pcdm.org/models#>"
+            		+ " INSERT { <> a pcdm:File } WHERE {}";
+            updateSubject( httpClient, sparqlUpdate, repo.getRepositoryUrl(), dsPath /*+ "/fcr:metadata"*/, "application/sparql-update");
+    	}
+    }
+
+    private static void findOrCreateDirectContainer( final HttpClient httpClient, final FedoraRepository repo, final String directContainerPath ) throws Exception {
+		//create LDP DirectContainer to contain files if doesn't exist
+        final String objPath = directContainerPath.substring(0, directContainerPath.lastIndexOf(ldpDirectContainerFilePath));
+		final String containerPath = directContainerPath + "/";
+		
+		if (!repo.exists(containerPath)) {
+			int idx = repo.getRepositoryUrl().indexOf("/", 9);
+	        String root = repo.getRepositoryUrl().substring(idx);
+	        String rdfTurtle = "@prefix ldp: <http://www.w3.org/ns/ldp#> "
+	        		+ " @prefix pcdm: <http://pcdm.org/models#> "
+	        		+ " <> a ldp:DirectContainer ;"
+	        		+ " ldp:membershipResource <" + root + objPath + "> ;"
+	        		+ " ldp:hasMemberRelation pcdm:hasFile .";
+	    	updateSubject( httpClient, rdfTurtle, repo.getRepositoryUrl(), containerPath, "text/turtle");
+		}
     }
 
     private static void loadFile( FedoraRepository repo, String dsPath, File dsFile ) {
