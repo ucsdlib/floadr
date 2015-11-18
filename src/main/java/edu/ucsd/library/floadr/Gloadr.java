@@ -338,8 +338,7 @@ public class Gloadr {
                                     makeIndexable( repo.findOrCreateObject(path) );
                                 }
                                 // update subject properties
-                                updateSubject( httpClient, vNode.model, repositoryURL, path, "application/rdf+xml" );
-
+                                updateSubject( httpClient, vNode.model, repositoryURL, path + (vNode.getNodeType().equals(DAMSNode.NODETYPE_FILE) ? "/fcr:metadata" : ""), "application/rdf+xml" );
                                 // handling federates files linking
                                 if ( StringUtils.isNoneBlank( federatedURL ) && (sid.endsWith("/fcr:content") || (files.indexOf( sid ) >= 0 && !damsNodes.containsKey(sid + "/fcr:content"))) ) {
                                     final String dsPath = path.replace("/fcr:content", "");
