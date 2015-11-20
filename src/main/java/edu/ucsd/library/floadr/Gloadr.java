@@ -3,6 +3,7 @@ package edu.ucsd.library.floadr;
 import static edu.ucsd.library.floadr.Floadr.pairPath;
 import static java.lang.Integer.MAX_VALUE;
 import static org.apache.commons.lang3.StringUtils.isBlank;
+import static org.apache.jena.riot.WebContent.contentTypeSPARQLUpdate;
 import static org.slf4j.LoggerFactory.getLogger;
 
 import java.io.BufferedReader;
@@ -33,8 +34,10 @@ import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpPatch;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.DefaultHttpClient;
@@ -599,7 +602,31 @@ public class Gloadr {
         }
 
     }
+    private static void sparqlUpdate(final HttpClient httpClient, final String content, final String repositoryURL, final String path) throws Exception {
+        HttpPatch patch = null;
+        try {
+            log.debug(content);
+            patch = createPatchMethod(repositoryURL, path, content);
+            final HttpResponse response= httpClient.execute(patch);
+            final int status = response.getStatusLine().getStatusCode();
 
+            if ( status == 204 ) {
+                log.debug("Updated subject: " + path);
+            } else if ( status == 201 ) {
+                log.debug("Created subject: " + path);
+            } else {
+                log.warn(content);
+                throw new FedoraException("Failed " + path + "; status " + status + ".\n");
+            }
+        } catch (final Exception e) {
+            throw e;
+        } finally {
+            if ( patch != null ) {
+                patch.releaseConnection();
+            }
+        }
+
+    }
     private static void ingestFile(HttpClient httpClient, FedoraRepository repo, String objPath, String dsPath, String sourceDir)
     		throws Exception {
     	final String[] paths = dsPath.substring(dsPath.lastIndexOf(ldpDirectContainerFilePath) + ldpDirectContainerFilePath.length()).split("/");
@@ -634,7 +661,7 @@ public class Gloadr {
             // update the RDF metadata of the ldp:NonRdfSource to specify that the resource is a pcdm:File
             String sparqlUpdate = "PREFIX pcdm: <http://pcdm.org/models#>"
             		+ " INSERT { <> a pcdm:File } WHERE {}";
-            updateSubject( httpClient, sparqlUpdate, repo.getRepositoryUrl(), dsPath /*+ "/fcr:metadata"*/, "application/sparql-update");
+            sparqlUpdate( httpClient, sparqlUpdate, repo.getRepositoryUrl(), dsPath + "/fcr:metadata");
     	}
     }
 
@@ -710,6 +737,24 @@ public class Gloadr {
         }
         put.setEntity( new InputStreamEntity(updatedProperties) );
         return put;
+    }
+
+    /**
+     * Create a request to update triples with SPARQL Update.
+     * @param path The datastream path.
+     * @param sparqlUpdate SPARQL Update command.
+     * @return created patch based on parameters
+     * @throws FedoraException
+    **/
+    public static HttpPatch createPatchMethod(final String repositoryURL, final String path, final String sparqlUpdate) throws FedoraException {
+        if ( isBlank(sparqlUpdate) ) {
+            throw new FedoraException("SPARQL Update command must not be blank");
+        }
+
+        final HttpPatch patch = new HttpPatch(repositoryURL + path);
+        patch.setEntity( new ByteArrayEntity(sparqlUpdate.getBytes()) );
+        patch.setHeader("Content-Type", contentTypeSPARQLUpdate);
+        return patch;
     }
 
     /**
