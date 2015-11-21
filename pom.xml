@@ -8,7 +8,7 @@
   <url>http://library.ucsd.edu</url>
   <properties>
     <project_name>floadr</project_name>
-    <fcrepo4.version>4.3.1-SNAPSHOT</fcrepo4.version>
+    <fcrepo4.version>4.4.1-SNAPSHOT</fcrepo4.version>
     <httpclient.version>4.3.3</httpclient.version>
     <logback.version>1.0.13</logback.version>
     <slf4j.version>1.7.7</slf4j.version>
