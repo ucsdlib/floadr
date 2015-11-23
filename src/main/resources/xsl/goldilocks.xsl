@@ -13,7 +13,7 @@
     xmlns:ldp="http://www.w3.org/ns/ldp#"
     xmlns:mads="http://www.loc.gov/mads/rdf/v1#"
     xmlns:marcrel="http://id.loc.gov/vocabulary/relators/"
-    xmlns:mix="http://www.loc.gov/mix/v20#"
+    xmlns:mix20="http://www.loc.gov/mix/v20#"
     xmlns:modsrdf="http://www.loc.gov/mods/rdf/v1#"
     xmlns:olcruise="http://schema.geolink.org/dev/view#"
     xmlns:pcdm="http://pcdm.org/models#"
@@ -310,25 +310,25 @@
     </xsl:for-each>
   </xsl:template>
   <xsl:template match="dams:sourceType">
-    <mix:sourceType><xsl:value-of select="."/></mix:sourceType>
+    <mix20:sourceType><xsl:value-of select="."/></mix20:sourceType>
   </xsl:template>
   <xsl:template match="dams:imageProducer">
-    <mix:imageProducer><xsl:value-of select="."/></mix:imageProducer>
+    <mix20:imageProducer><xsl:value-of select="."/></mix20:imageProducer>
   </xsl:template>
   <xsl:template match="dams:captureSource">
-    <mix:captureSource><xsl:value-of select="."/></mix:captureSource>
+    <mix20:captureSource><xsl:value-of select="."/></mix20:captureSource>
   </xsl:template>
   <xsl:template match="dams:scannerManufacturer">
-    <mix:scannerManufacturer><xsl:value-of select="."/></mix:scannerManufacturer>
+    <mix20:scannerManufacturer><xsl:value-of select="."/></mix20:scannerManufacturer>
   </xsl:template>
   <xsl:template match="dams:scannerModelName">
-    <mix:scannerModelName><xsl:value-of select="."/></mix:scannerModelName>
+    <mix20:scannerModelName><xsl:value-of select="."/></mix20:scannerModelName>
   </xsl:template>
   <xsl:template match="dams:scanningSoftware">
-    <mix:scanningSoftware><xsl:value-of select="."/></mix:scanningSoftware>
+    <mix20:scanningSoftware><xsl:value-of select="."/></mix20:scanningSoftware>
   </xsl:template>
   <xsl:template match="dams:scanningSoftwareVersion">
-    <mix:scanningSoftwareVersion><xsl:value-of select="."/></mix:scanningSoftwareVersion>
+    <mix20:scanningSoftwareVersion><xsl:value-of select="."/></mix20:scanningSoftwareVersion>
   </xsl:template>
 
   <!-- language -->
