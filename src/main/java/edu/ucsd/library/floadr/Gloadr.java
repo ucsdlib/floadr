@@ -310,7 +310,7 @@ public class Gloadr {
                 	final String oPath = objNode.getNodeID().replace(repositoryURL, "");
                 	if ( !repo.exists(oPath) )
                 			repo.createObject(oPath);
-                    if ( !repo.exists(oPath + "rights") ) {
+                    if ( !repo.exists(oPath + "rights") && topDAMSNode.getNodeID().endsWith(oPath) ) {
                         log.debug(record + ": creating " + oPath + "rights");
                         repo.createObject(oPath + "rights");
                     }
