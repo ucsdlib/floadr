@@ -120,7 +120,8 @@ public class Floadr {
         while( i < (s.length() - 1) && i < 10)
         {
             result += s.substring(i,i+2);
-            result += "/";
+            // skip backward slash for blanknode
+            result += (s.length() > 10 && s.charAt(i+2) == '#') ? "":"/";
             i += 2;
         }
         if ( s.length() > i )
