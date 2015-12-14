@@ -180,6 +180,11 @@ public class Gloadr {
                         log.info("skipping: " + linkPath );
                     }
 
+                    if ( linkPath.indexOf("#N") > 0 ) {
+                        final Node node = about.getParent();
+                        about.detach();
+                        ((Element)node).addAttribute("rdf:nodeID", linkPath.substring(linkPath.lastIndexOf("#") + 1));
+                    }
                 }
 
                 // separate components as top level objects and retain the component structure
