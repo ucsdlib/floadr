@@ -180,11 +180,6 @@ public class Gloadr {
                         log.info("skipping: " + linkPath );
                     }
 
-                    if ( linkPath.indexOf("#N") > 0 ) {
-                        final Node node = about.getParent();
-                        about.detach();
-                        ((Element)node).addAttribute("rdf:nodeID", linkPath.substring(linkPath.lastIndexOf("#") + 1));
-                    }
                 }
 
                 // separate components as top level objects and retain the component structure
@@ -308,7 +303,7 @@ public class Gloadr {
                             damsNodes.get(repositoryURL + subPath).model.add(damsNode.getModel());
                             damsNode.setVisited(true);
                         }
-                    }
+                     }
                 }
 
                 // ingest the nodes in order basing on dependency
@@ -562,14 +557,13 @@ public class Gloadr {
         return QueryExecutionFactory.create(query, model).execDescribe();
     }
     private static void updateSubject(final HttpClient httpClient, final Model m, final String repositoryURL, final String path, String format) throws Exception {
-        final StringWriter sw = new StringWriter();
-        try
-        {
-            // serialize RDF
-            RDFWriter rdfw = m.getWriter("RDF/XML-ABBREV");
-            rdfw.setProperty("prettyTypes", new Resource[]{});
+    	final StringWriter sw = new StringWriter();
+    	try {
+    		// serialize RDF
+    		RDFWriter rdfw = m.getWriter("RDF/XML-ABBREV");
+    		rdfw.setProperty("prettyTypes", new Resource[]{});
 
-            rdfw.write( m, sw, null );
+    		rdfw.write( m, sw, null );
             updateSubject( httpClient, sw.toString(), repositoryURL, path, format);
         } catch (final Exception e) {
             throw e;
