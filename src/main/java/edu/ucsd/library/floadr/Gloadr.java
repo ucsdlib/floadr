@@ -65,6 +65,7 @@ import com.hp.hpl.jena.rdf.model.Model;
 import com.hp.hpl.jena.rdf.model.ModelFactory;
 import com.hp.hpl.jena.rdf.model.NodeIterator;
 import com.hp.hpl.jena.rdf.model.RDFNode;
+import com.hp.hpl.jena.rdf.model.RDFWriter;
 import com.hp.hpl.jena.rdf.model.ResIterator;
 import com.hp.hpl.jena.rdf.model.Resource;
 
@@ -179,11 +180,6 @@ public class Gloadr {
                         log.info("skipping: " + linkPath );
                     }
 
-                    if ( linkPath.indexOf("#N") > 0 ) {
-                        final Node node = about.getParent();
-                        about.detach();
-                        ((Element)node).addAttribute("rdf:nodeID", about.getStringValue());
-                    }
                 }
 
                 // separate components as top level objects and retain the component structure
@@ -217,13 +213,10 @@ public class Gloadr {
                 dur2 = System.currentTimeMillis();
                 linkDur += (dur2 - dur1);
 
-                // make sure object and rights nodes exist
                 dur1 = System.currentTimeMillis();
 
                 if ( !repo.exists(objPath) ) {
                 	repo.createObject(objPath);
-                    log.debug(record + ": creating " + objPath + "rights");
-                    repo.createObject(objPath + "rights");
                 }
 
                 dur2 = System.currentTimeMillis();
@@ -291,9 +284,9 @@ public class Gloadr {
                 // check for missing subjects and create it for now so that the ingest won't interrupted.
                 for ( final DAMSNode damsNode : damsNodes.values() ) {
                     final String nid = damsNode.getNodeID();
+                    String subPath = nid.replace(repositoryURL, "");
                     if (damsNode.getModel() == null) {
 
-                        final String subPath = nid.replace(repositoryURL, "");
                         log.info("Missing RDF/XML: " + nid + "; path => " + subPath);
                         if ( !repo.exists( subPath ) ) {
                             repo.createObject( subPath );
@@ -302,7 +295,15 @@ public class Gloadr {
                                 subjectsMissing.add( nid );
                             }
                         }
-                    }
+                    } else {
+                        // add blankNode to the parent subject model
+                        if(subPath.indexOf("#") > 0) {
+                            log.info("BlankNode RDF/XML: " + nid + "; path => " + subPath + "; ");
+                            subPath = subPath.substring(0, subPath.indexOf("#"));
+                            damsNodes.get(repositoryURL + subPath).model.add(damsNode.getModel());
+                            damsNode.setVisited(true);
+                        }
+                     }
                 }
 
                 // ingest the nodes in order basing on dependency
@@ -310,10 +311,6 @@ public class Gloadr {
                 	final String oPath = objNode.getNodeID().replace(repositoryURL, "");
                 	if ( !repo.exists(oPath) )
                 			repo.createObject(oPath);
-                    if ( !repo.exists(oPath + "rights") && topDAMSNode.getNodeID().endsWith(oPath) ) {
-                        log.debug(record + ": creating " + oPath + "rights");
-                        repo.createObject(oPath + "rights");
-                    }
 
                     do {
                     final List<DAMSNode> res = new ArrayList<>();
@@ -562,7 +559,11 @@ public class Gloadr {
     private static void updateSubject(final HttpClient httpClient, final Model m, final String repositoryURL, final String path, String format) throws Exception {
     	final StringWriter sw = new StringWriter();
     	try {
-            m.write(sw);
+    		// serialize RDF
+    		RDFWriter rdfw = m.getWriter("RDF/XML-ABBREV");
+    		rdfw.setProperty("prettyTypes", new Resource[]{});
+
+    		rdfw.write( m, sw, null );
             updateSubject( httpClient, sw.toString(), repositoryURL, path, format);
         } catch (final Exception e) {
             throw e;
@@ -571,7 +572,6 @@ public class Gloadr {
                 sw.close();;
             }
         }
-
     }
     private static void updateSubject(final HttpClient httpClient, final String content, final String repositoryURL, final String path, String format) throws Exception {
         HttpPut put = null;
