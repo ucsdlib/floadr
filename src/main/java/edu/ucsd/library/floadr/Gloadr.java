@@ -317,8 +317,9 @@ public class Gloadr {
                     visitNode( objNode, res );
                     if ( res.size() > 0 ) {
                         final DAMSNode vNode = res.get(0);
-                        if ( !vNode.visited && vNode.model != null) {
+                        if ( !vNode.visited ) {
 
+                            if ( vNode.model != null) {
                             final String sid = vNode.nodeID;
                             final String path = sid.replace(repositoryURL, "");
 
@@ -361,6 +362,7 @@ public class Gloadr {
                                 if ( nidx >= 0 ) {
                                     subjectsMissing.remove( nidx );
                                 }
+                            }
                             }
                             vNode.setVisited(true);
                         }
