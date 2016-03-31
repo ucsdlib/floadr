@@ -99,7 +99,7 @@ public class Gloadr {
 
         // load goldilocks.xsl
         final StreamSource xsl = new StreamSource(Gloadr.class.getClassLoader().getResourceAsStream(
-                "xsl/goldilocks.xsl"));
+                "xsl/dams4.2.xsl"));
         final Transformer xslt = TransformerFactory.newInstance().newTransformer(xsl);
         xslt.setParameter("repositoryURL", repositoryURL);
 
