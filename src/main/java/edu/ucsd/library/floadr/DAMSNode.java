@@ -11,8 +11,10 @@ import com.hp.hpl.jena.rdf.model.Model;
  * @date Since September 23, 2015
  */
 public class DAMSNode {
+	public static String NODETYPE_COLLECTION = "Collection";
 	public static String NODETYPE_OBJECT = "Object";
 	public static String NODETYPE_COMPONENT = "Component";
+	public static String NODETYPE_FILESET = "FileSet";
 	public static String NODETYPE_FILE = "File";
 
 	protected String nodeID = null;
