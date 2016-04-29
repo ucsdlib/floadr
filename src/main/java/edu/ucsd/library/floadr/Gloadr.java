@@ -22,6 +22,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.UUID;
 
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
@@ -80,6 +81,10 @@ public class Gloadr {
     private static Logger log = getLogger(Gloadr.class);
     private static List<String> subjectsMissing = new ArrayList<>();
     private static String ldpDirectContainerFilePath = "/files";
+    private static String NS_PREFIX_EBUCORE = "http://www.ebu.ch/metadata/ontologies/ebucore/ebucore#";
+    private static String NS_PREFIX_IANA = "http://www.iana.org/assignments/relation/";
+    private static String NS_PREFIX_OPENARCHIVES = "http://www.openarchives.org/ore/terms/";
+    private static String NS_PREFIX_DCTERMS = "http://purl.org/dc/terms/";
 
     /**
      * Command-line operation.
@@ -120,6 +125,7 @@ public class Gloadr {
         int errors  = 0;
         int record = 0;
         boolean ingestFailed = false;
+        final List<String> collections = new ArrayList<>();
         final List<String> errorIds = new ArrayList<>();
         final BufferedReader objectIdReader = new BufferedReader( new FileReader(objectIds) );
         for ( String id = null; (id = objectIdReader.readLine()) != null; ) {
@@ -146,7 +152,6 @@ public class Gloadr {
                 doc = result.getDocument();
                 dur2 = System.currentTimeMillis();
                 xsltDur += (dur2 - dur1);
-
                 // make sure links work
                 dur1 = System.currentTimeMillis();
 
@@ -197,10 +202,36 @@ public class Gloadr {
                 	toTopLevelObject ( repo, doc, component, objects, compNode, damsNodes );
                 }
 
-                // use LDP DirectContainer to contain object files
-                List<Node> oNodes = doc.selectNodes("/rdf:RDF/*");
-                for (Node oNode : oNodes) {
-                	applyLdpDirectContainerForFiles( oNode );
+                // object need to add as a memeber to the collection
+                List<Node> colIdNodes = doc.selectNodes("/rdf:RDF/*[local-name() = 'Object']/pcdm:memberOf/@rdf:resource");
+                for (Node colIdNode : colIdNodes)
+                {
+                	String colID = colIdNode.getStringValue();
+                	collections.add( colID.replace(repo.getRepositoryUrl(), "") );
+                	// add collection to object list for ingest
+                	DAMSNode colNode = new DAMSNode(colID, colID);
+                	colNode.setNodeType(DAMSNode.NODETYPE_COLLECTION);
+                	damsNodes.put(colID, colNode);
+                	objects.add(colID);
+
+                	colIdNode.getParent().detach();
+                }
+
+                // CurationConcerns FileSet structure
+                List<Element> objElems = doc.selectNodes("//*[name() = 'dams42:Object']");
+                List<String> fileSetList = new ArrayList<>();
+                Map<String, List<String>> objFSMap = new HashMap<>();
+                for (Element objElem : objElems)
+                {
+                	List<String> fileSets = new ArrayList<>();
+                    List<Node> fsNodes = objElem.selectNodes("*[local-name() = 'hasMember']/*[local-name() = 'FileSet']");
+                    for (Node fsNode : fsNodes)
+                    {
+                    	applyLdpDirectContainerForFiles (httpClient, repo, objElem, fsNode, objPath);
+                    	fileSets.add(fsNode.selectSingleNode("@rdf:about").getStringValue());
+                    }
+                    fileSetList.addAll(fileSets);
+                    objFSMap.put(objElem.selectSingleNode("@rdf:about").getStringValue(), fileSets);
                 }
 
                 // add the main object to the objects list
@@ -248,6 +279,8 @@ public class Gloadr {
                             rdfNode = new DAMSNode ( sid, new ArrayList<DAMSNode>(), sm );
                             if ( files.indexOf( sid ) >= 0 )
                             	rdfNode.setNodeType(DAMSNode.NODETYPE_FILE);
+                            else if (fileSetList.contains( sid ))
+                            	rdfNode.setNodeType(DAMSNode.NODETYPE_FILESET);
 
                             damsNodes.put( sid, rdfNode );
                         } else {
@@ -323,8 +356,8 @@ public class Gloadr {
                             final String sid = vNode.nodeID;
                             final String path = sid.replace(repositoryURL, "");
 
-                            log.info( "Ingesting subject " + path + " in object " + objNode.getAlternativeID());
-                            if ( !repo.exists(path) || objects.indexOf(sid) >= 0 || subjectsMissing.indexOf( vNode.getNodeID() ) >= 0 ) {
+                            log.info( "Ingesting subject " + path + " in " + objNode.getNodeType() + " " + objNode.getAlternativeID());
+                            if ( !repo.exists(path) || objects.indexOf(sid) >= 0 || fileSetList.contains(sid) || subjectsMissing.indexOf( vNode.getNodeID() ) >= 0 ) {
 
                             	try {
                                 // create the filestream
@@ -370,9 +403,23 @@ public class Gloadr {
                     } while ( !objNode.isVisited() );
                 }
 
+                // link file sets to object with ore:Proxy
+                for ( String objId : objFSMap.keySet() ) {
+                	linkFileSetsToObjects( httpClient, repo, objId.replace(repo.getRepositoryUrl(), ""), objFSMap.get(objId) );
+                }
+
                 // link components to object with ore:Proxy
                 if (objects.size() > 1) {
                     linkComponentsToObject( httpClient, repo, topDAMSNode, Arrays.asList(objNodes) );
+                }
+
+                // add collection members
+                for ( String colPath : collections )
+                {
+    	    		String membersPath = colPath + "/members";
+    	    		createMembers( httpClient, repo, membersPath );
+    	    		// create ore:Proxy
+    	    		createProxy( httpClient, repo, membersPath, null, colPath, objPath );
                 }
 
                 dur2 = System.currentTimeMillis();
@@ -469,7 +516,6 @@ public class Gloadr {
 
     	// added as top level object
     	doc.getRootElement().add(component);
-
     	// loop through child components to make them to level objects as well
     	List<Node> components = component.selectNodes("pcdm:hasMember/*[local-name() = 'Component']");
     	for ( Node comp : components ) {
@@ -481,14 +527,28 @@ public class Gloadr {
         }
     }
 
-    private static void applyLdpDirectContainerForFiles (Node topNode) {
-    	String oid = topNode.selectSingleNode("@rdf:about").getStringValue();
-        List<Node> nodes = topNode.selectNodes("*[contains(local-name(), '" + DAMSNode.NODETYPE_FILE + "')]/*");
-        for (Node node : nodes) {
-    		Node resNode = node.selectSingleNode("@rdf:about");
-    		resNode.setText(resNode.getStringValue().replace(oid, oid + ldpDirectContainerFilePath));
-    		log.debug("Converted file " + resNode.getStringValue() + " to use LDP Direct Container: " + oid + ldpDirectContainerFilePath);
-    	}
+    private static void applyLdpDirectContainerForFiles (HttpClient httpClient, FedoraRepository repo, Element parent, Node fsNode, String objPath) throws Exception
+    {
+    	// create member container
+    	String parentPath = parent.selectSingleNode("@rdf:about").getStringValue().replace(repo.getRepositoryUrl(), "");
+    	String fsPath = repo.createResource("").getPath();
+    	String fsid = repo.getRepositoryUrl() + fsPath;
+    	String ofsid = fsNode.selectSingleNode("@rdf:about").getStringValue();
+    	fsNode.selectSingleNode("@rdf:about").setText(fsid);
+
+    	// update file url
+        List<Node> fileNodes = fsNode.selectNodes("*[local-name() = 'hasFile']/*[local-name() = 'File']");
+        for (Node fileNode : fileNodes)
+        {
+        	Node fidNode = fileNode.selectSingleNode("@rdf:about");
+        	String ofid =  fidNode.getStringValue();
+        	if( ofid.startsWith(ofsid) ) // files with random id
+        		fidNode.setText( ofid.replace(ofsid, fsid + ldpDirectContainerFilePath) );
+        	else if( ofid.indexOf(objPath) >= 0 ) // files with object path
+        		fidNode.setText( ofid.replace(objPath, fsPath + ldpDirectContainerFilePath) );
+        	else// files with ark url
+        		fidNode.setText( fileNode.selectSingleNode("@rdf:about").getStringValue().replace(parentPath, fsPath + ldpDirectContainerFilePath) );
+        }
     }
 
     private static void linkComponentsToObject(HttpClient httpClient, FedoraRepository repo, DAMSNode parent, List<DAMSNode> objects) throws Exception {
@@ -503,9 +563,98 @@ public class Gloadr {
 	    		String membersPath = parent.getNodeID().replace(repo.getRepositoryUrl(), "") + "/members";
 	    		createMembers( httpClient, repo, membersPath );
 	    		// create ore:Proxy
-	    		createProxy( httpClient, repo, membersPath, parent, component );
+	    		String cid = component.getNodeID();
+	    		String proxyPath = membersPath + cid.substring(cid.lastIndexOf("/"));
+	    		String proxyFor = component.getNodeID().replace(repo.getRepositoryUrl(), "");
+	    		String proxyIn = parent.getNodeID().replace(repo.getRepositoryUrl(), "");
+	    		createProxy( httpClient, repo, membersPath, proxyPath, proxyFor, proxyIn);
 	    	}
     	}
+    }
+
+    private static void linkFileSetsToObjects(HttpClient httpClient, FedoraRepository repo, String objPath, List<String> fsIds) throws Exception {
+        String first = null;
+        String last = null;
+
+    	String prevProxyPath = null;
+    	int idx = repo.getRepositoryUrl().indexOf("/", 9);
+        String root = repo.getRepositoryUrl().substring(idx);
+
+		// create members indirect container
+		String membersPath = objPath + "/members";
+		// create ordering list container
+		String list_source = objPath + "/list_source";
+		StringBuilder lsSparql = new StringBuilder();
+		lsSparql.append( " PREFIX iana: <" + NS_PREFIX_IANA + ">");
+		lsSparql.append( " PREFIX  dcterms: <" + NS_PREFIX_DCTERMS + ">" );
+		lsSparql.append( " PREFIX ore: <" + NS_PREFIX_OPENARCHIVES + ">");
+		lsSparql.append( " INSERT {" );
+    	for ( int i=0; i< fsIds.size(); i++ )
+    	{
+    		String fsId = fsIds.get( i );
+    		String fsPath = fsId.replace(repo.getRepositoryUrl(), "");
+    		String lsPartPath = list_source + "#" + UUID.randomUUID();
+    		if ( i==0 ) 
+    		{
+    			createMembers( httpClient, repo, membersPath );
+    			repo.findOrCreateObject( list_source );
+
+    			// add to object: ebucore: hasRelatedImage and ebucore: hasRelatedMediaFragment
+    			StringBuilder relatedSparql = new StringBuilder();
+    			relatedSparql.append( " PREFIX ebucore: <" + NS_PREFIX_EBUCORE + ">");
+    			relatedSparql.append( " INSERT {" );
+    			relatedSparql.append( " <> ebucore:hasRelatedImage <" + root + fsPath + "> . " );
+    			relatedSparql.append( " <> ebucore:hasRelatedMediaFragment <" + root + fsPath + "> . " );
+    			relatedSparql.append( "  } WHERE { }" );
+    			sparqlUpdate( httpClient, relatedSparql.toString(), repo.getRepositoryUrl(), objPath );
+    		}
+    		// create ore:Proxy
+    		createProxy( httpClient, repo, membersPath, null, fsPath, objPath);
+
+    		lsSparql.append( " <> dcterms:hasPart <" + root + lsPartPath + "> . " );
+			lsSparql.append( " <" + root + lsPartPath + "> ore:proxyFor <" + root + fsPath + "> . " );
+			lsSparql.append( " <" + root + lsPartPath + "> ore:proxyIn <" + root + objPath + "> . " );
+    		if ( i==0 ) {
+				first = lsPartPath;
+				lsSparql.append( " <> iana:first <" + root + lsPartPath + "> . " );
+			}
+			if ( i==fsIds.size() - 1 )
+			{
+				last = lsPartPath;
+				lsSparql.append( " <> iana:last <" + root + lsPartPath + "> . " );
+			}
+
+			if (StringUtils.isNotBlank( prevProxyPath ))
+    		{
+				lsSparql.append( " <" + root + lsPartPath + "> iana:prev <" + root + prevProxyPath + "> . " );
+				lsSparql.append( " <" + root + prevProxyPath + "> iana:next <" + root + lsPartPath + "> . " );
+    		}
+			prevProxyPath = lsPartPath;
+    	}
+
+    	if ( fsIds.size() > 0 )
+    	{
+	    	// add first and last fieset proxt to object
+            Map<String, String> proxies = new TreeMap<>();
+			proxies.put( "first", root + first );
+			proxies.put( "last", root + last );
+			sparqlUpdate( httpClient, createOrderSparql( proxies ), repo.getRepositoryUrl(), objPath );
+			
+			lsSparql.append( "  } WHERE { }" );
+			sparqlUpdate( httpClient, lsSparql.toString(), repo.getRepositoryUrl(), list_source );
+    	}
+    }
+
+    private static String createOrderSparql(Map<String, String> proxies)
+    {
+    	StringBuilder sparql = new StringBuilder();
+    	sparql.append( "PREFIX iana: <" + NS_PREFIX_IANA + "> \nINSERT {" );
+    	for (String key : proxies.keySet())
+    	{
+    		sparql.append( "<> iana:" + key + " <" + proxies.get(key) + "> . ");
+    	}
+    	sparql.append( " } WHERE { }");
+    	return sparql.toString();
     }
 
     private static void makeIndexable( final FedoraObject obj ) throws FedoraException {
@@ -513,6 +662,9 @@ public class Gloadr {
     }
 
     private static void createMembers( final HttpClient httpClient, final FedoraRepository repo, final String membersPath ) throws Exception {
+        if (repo.exists( membersPath ))
+        	return;
+ 
         int idx = repo.getRepositoryUrl().indexOf("/", 9);
         String root = repo.getRepositoryUrl().substring(idx);
         String rdfTurtle = "@prefix ldp: <http://www.w3.org/ns/ldp#>"
@@ -525,15 +677,18 @@ public class Gloadr {
         updateSubject( httpClient, rdfTurtle, repo.getRepositoryUrl(), membersPath, "text/turtle");
     }
 
-    private static void createProxy( final HttpClient httpClient, final FedoraRepository repo, String membersPath, DAMSNode parent, DAMSNode component ) throws Exception {
+    private static String createProxy( final HttpClient httpClient, final FedoraRepository repo, 
+    		final String membersPath, final String proxyPath, final String proxyforPath, String proxyInPath ) throws Exception {
         int idx = repo.getRepositoryUrl().indexOf("/", 9);
         String root = repo.getRepositoryUrl().substring(idx);
-        String cid = component.getNodeID();
-        String proxyPath = membersPath + cid.substring(cid.lastIndexOf("/"));
-        String rdfTurtle = "@prefix ore: <http://www.openarchives.org/ore/terms/> "
-        		+ " <> ore:proxyFor <" + root + component.getNodeID().replace(repo.getRepositoryUrl(), "") + "> ;"
-        		+ " ore:proxyIn <" + root + parent.getNodeID().replace(repo.getRepositoryUrl(), "") + "> .";
-    	updateSubject( httpClient, rdfTurtle, repo.getRepositoryUrl(), proxyPath, "text/turtle");
+        String rdfTurtle = "@prefix ore: <" + NS_PREFIX_OPENARCHIVES + "> "
+        		+ " <> ore:proxyFor <" + root + proxyforPath + "> ;"
+        		+ " ore:proxyIn <" + root + proxyInPath + "> .";
+        String path = proxyPath;
+        if (StringUtils.isBlank(proxyPath))
+        	path = repo.createResource(membersPath).getPath();
+    	updateSubject( httpClient, rdfTurtle, repo.getRepositoryUrl(), path, "text/turtle");
+    	return path;
     }
 
 	private static String fixLink( final String path, final String repositoryURL ) {
@@ -694,7 +849,7 @@ public class Gloadr {
                 final FedoraContent content = new FedoraContent().setContent(in)
                         .setFilename(dsFile.getName()).setContentType(mimeType);
                 final FedoraDatastream ds = repo.createDatastream( dsPath, content );
-                log.info("  Datastream: " + ds.getPath());
+                log.info("  Datastream: " + ds.getPath() + "; source: " + dsFile.getAbsolutePath());
             }
         } catch ( Exception ex ) {
             log.warn("Error: " + ex.toString());
