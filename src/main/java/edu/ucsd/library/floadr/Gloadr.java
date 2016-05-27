@@ -788,7 +788,7 @@ public class Gloadr {
     		throws Exception {
     	final String[] paths = dsPath.substring(dsPath.lastIndexOf(ldpDirectContainerFilePath) + ldpDirectContainerFilePath.length()).split("/");
     	String mappedFilePath = objPath;
-    	if (dsPath.startsWith(objPath)) {
+    	if (dsPath.startsWith(objPath) || (paths.length == 2 && paths[1].indexOf(".") > 0)) {
     		// simple objects that keep its original ark with cid 0
     		mappedFilePath += "/0";
     	}
